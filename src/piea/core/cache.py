@@ -31,7 +31,7 @@ class CacheLayer:
 
     def __init__(
         self,
-        redis_client: aioredis.Redis | None = None,  # type: ignore[type-arg]
+        redis_client: aioredis.Redis | None = None,
         key_prefix: str = "piea",
     ) -> None:
         self._owns_client = redis_client is None
@@ -41,7 +41,7 @@ class CacheLayer:
         )
         self._prefix = key_prefix
 
-    async def get(self, namespace: str, key: str) -> object | None:
+    async def get(self, namespace: str, key: str) -> object | None:  # noqa: ANN401
         """Retrieve a cached value.
 
         Args:
@@ -62,7 +62,8 @@ class CacheLayer:
             return None
 
         try:
-            return json.loads(raw)
+            result: object = json.loads(raw)
+            return result
         except (json.JSONDecodeError, TypeError):
             logger.warning("Failed to deserialize cached value for key %s", full_key)
             return None

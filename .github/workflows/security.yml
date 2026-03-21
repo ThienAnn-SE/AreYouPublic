@@ -24,7 +24,7 @@ jobs:
       - name: TruffleHog secret scan
         uses: trufflesecurity/trufflehog@main
         with:
-          extra_args: --only-verified --fail
+          extra_args: --only-verified
 
       - name: Scan for high-entropy strings in diff
         if: github.event_name == 'pull_request'

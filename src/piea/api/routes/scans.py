@@ -8,13 +8,13 @@ import hashlib
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from piea.api.dependencies import get_client_ip, get_consent_service
 from piea.api.schemas.scan_request import ScanRequest
 from piea.api.schemas.scan_response import ScanCreatedResponse, ScanStatusResponse
-from piea.core.consent import ConsentInput, ConsentService, ConsentError
+from piea.core.consent import ConsentError, ConsentInput, ConsentService
 from piea.db.models import Scan
 from piea.db.session import get_db
 

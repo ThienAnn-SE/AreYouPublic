@@ -11,20 +11,17 @@ with a docker-based engine (added in later phases).
 """
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from piea.db.models import Base
 
-
 # ---------------------------------------------------------------------------
 # Database fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def db_engine():
@@ -72,16 +69,19 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 # Service fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def consent_service(db_session):
     """Provide a ConsentService bound to the test session."""
     from piea.core.consent import ConsentService
+
     return ConsentService(db_session)
 
 
 # ---------------------------------------------------------------------------
 # HTTP client fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def client(db_session) -> AsyncGenerator[httpx.AsyncClient, None]:

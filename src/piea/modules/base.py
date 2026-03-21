@@ -104,9 +104,7 @@ class ModuleError(Exception):
 class ModuleAPIError(ModuleError):
     """Raised when an external API returns an unexpected error."""
 
-    def __init__(
-        self, module_name: str, status_code: int, detail: str = ""
-    ) -> None:
+    def __init__(self, module_name: str, status_code: int, detail: str = "") -> None:
         self.status_code = status_code
         msg = f"API returned HTTP {status_code}"
         if detail:
@@ -174,7 +172,7 @@ class BaseModule(abc.ABC):
         in the errors list. Only raise for truly unrecoverable situations.
         """
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # noqa: B027
         """Clean up resources (HTTP clients, connections, etc.).
 
         Override this if the module holds long-lived resources.

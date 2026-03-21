@@ -12,11 +12,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 import respx
 
-from piea.modules.base import ModuleAPIError, ModuleResult, Severity, ScanInputs
+from piea.modules.base import ModuleAPIError, ScanInputs, Severity
 from piea.modules.hibp import (
     HIBP_API_BASE,
     HIBP_PASSWORDS_BASE,
@@ -26,7 +25,6 @@ from piea.modules.hibp import (
     HIBPModule,
     classify_breach_severity,
 )
-
 
 # ---------------------------------------------------------------------------
 # Sample data
@@ -107,7 +105,10 @@ class TestClassifyBreachSeverity:
     """Tests for the classify_breach_severity function."""
 
     def test_critical_when_passwords_exposed(self):
-        assert classify_breach_severity(["Passwords", "Email addresses"]) == Severity.CRITICAL
+        assert (
+            classify_breach_severity(["Passwords", "Email addresses"])
+            == Severity.CRITICAL
+        )
 
     def test_critical_when_financial_data_exposed(self):
         assert classify_breach_severity(["Financial data"]) == Severity.CRITICAL
@@ -116,10 +117,16 @@ class TestClassifyBreachSeverity:
         assert classify_breach_severity(["Plaintext passwords"]) == Severity.CRITICAL
 
     def test_critical_when_credit_cards_exposed(self):
-        assert classify_breach_severity(["Credit cards", "Email addresses"]) == Severity.CRITICAL
+        assert (
+            classify_breach_severity(["Credit cards", "Email addresses"])
+            == Severity.CRITICAL
+        )
 
     def test_high_when_phone_numbers_exposed(self):
-        assert classify_breach_severity(["Phone numbers", "Email addresses"]) == Severity.HIGH
+        assert (
+            classify_breach_severity(["Phone numbers", "Email addresses"])
+            == Severity.HIGH
+        )
 
     def test_high_when_physical_addresses_exposed(self):
         assert classify_breach_severity(["Physical addresses"]) == Severity.HIGH
@@ -131,7 +138,10 @@ class TestClassifyBreachSeverity:
         assert classify_breach_severity(["Dates of birth", "Names"]) == Severity.HIGH
 
     def test_medium_when_email_and_usernames_exposed(self):
-        assert classify_breach_severity(["Email addresses", "Usernames"]) == Severity.MEDIUM
+        assert (
+            classify_breach_severity(["Email addresses", "Usernames"])
+            == Severity.MEDIUM
+        )
 
     def test_medium_when_ip_addresses_exposed(self):
         assert classify_breach_severity(["IP addresses"]) == Severity.MEDIUM
@@ -145,9 +155,9 @@ class TestClassifyBreachSeverity:
     def test_highest_severity_wins(self):
         """When multiple severity levels apply, the highest wins."""
         data_classes = [
-            "Email addresses",   # medium
-            "Phone numbers",     # high
-            "Passwords",         # critical
+            "Email addresses",  # medium
+            "Phone numbers",  # high
+            "Passwords",  # critical
         ]
         assert classify_breach_severity(data_classes) == Severity.CRITICAL
 
@@ -204,18 +214,20 @@ class TestHIBPClientBreaches:
 
     @respx.mock
     async def test_parses_breach_data_classes_correctly(self):
-        breach_with_mixed = [{
-            "Name": "TestBreach",
-            "Title": "Test Breach",
-            "Domain": "test.com",
-            "BreachDate": "2024-01-01",
-            "AddedDate": "2024-01-15T00:00:00Z",
-            "PwnCount": 1000,
-            "Description": "Test breach",
-            "DataClasses": ["Phone numbers", "Email addresses"],
-            "IsVerified": False,
-            "IsSensitive": False,
-        }]
+        breach_with_mixed = [
+            {
+                "Name": "TestBreach",
+                "Title": "Test Breach",
+                "Domain": "test.com",
+                "BreachDate": "2024-01-01",
+                "AddedDate": "2024-01-15T00:00:00Z",
+                "PwnCount": 1000,
+                "Description": "Test breach",
+                "DataClasses": ["Phone numbers", "Email addresses"],
+                "IsVerified": False,
+                "IsSensitive": False,
+            }
+        ]
         respx.get(f"{HIBP_API_BASE}/breachedaccount/{TEST_EMAIL}").respond(
             200, json=breach_with_mixed
         )
