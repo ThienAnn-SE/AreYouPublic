@@ -207,9 +207,7 @@ class GraphCrawler(BaseModule):
         await self._session.flush()
         return state
 
-    async def _process_queue_entry(
-        self, entry: _QueueEntry, state: _BFSState
-    ) -> None:
+    async def _process_queue_entry(self, entry: _QueueEntry, state: _BFSState) -> None:
         """Extract one BFS queue entry and append results to state."""
         identifier, platform, depth, confidence, parent_id, linked = entry
         extractor = self._extractors.get(platform)
@@ -275,7 +273,9 @@ class GraphCrawler(BaseModule):
                     return await extractor.extract(identifier)
             except (ModuleAPIError, ModuleTimeoutError) as exc:
                 if attempt == MAX_RETRY_ATTEMPTS - 1:
-                    errors.append(f"{extractor.platform_name}: {exc}")  # no identifier — L007
+                    errors.append(
+                        f"{extractor.platform_name}: {exc}"
+                    )  # no identifier — L007
                     return None
                 await asyncio.sleep(_RETRY_BASE_DELAY * (2**attempt))
         return None  # unreachable; satisfies mypy
