@@ -34,10 +34,10 @@ from piea.modules.base import ModuleAPIError, ModuleTimeoutError, ScanInputs
 from piea.modules.extractors.base import BaseExtractor
 from piea.modules.extractors.models import LinkedAccount, ProfileData
 from piea.modules.graph_crawler import (
+    _EVIDENCE_CONFIDENCE,
     MAX_RETRY_ATTEMPTS,
     GraphCrawler,
     GraphCrawlerConfig,
-    _EVIDENCE_CONFIDENCE,
 )
 
 # ---------------------------------------------------------------------------
@@ -337,7 +337,9 @@ class TestCycleDetection:
         extractors = {
             "github": _make_extractor("github", seed_profile),
         }
-        crawler = _make_crawler(extractors, config=_cfg(seed_platform="github", max_depth=1))
+        crawler = _make_crawler(
+            extractors, config=_cfg(seed_platform="github", max_depth=1)
+        )
 
         result = await crawler.execute(ScanInputs(username="seed"))
 
