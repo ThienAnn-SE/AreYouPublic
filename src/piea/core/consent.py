@@ -15,8 +15,8 @@ import ipaddress
 from uuid import UUID
 
 from pydantic import BaseModel, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from piea.db.models import ConsentRecord
 
@@ -82,9 +82,7 @@ class ConsentInput(BaseModel):
     @classmethod
     def attestation_type_must_be_valid(cls, v: str) -> str:
         if v not in VALID_ATTESTATION_TYPES:
-            raise ValueError(
-                f"Must be one of: {sorted(VALID_ATTESTATION_TYPES)}"
-            )
+            raise ValueError(f"Must be one of: {sorted(VALID_ATTESTATION_TYPES)}")
         return v
 
     @field_validator("operator_ip")
@@ -93,7 +91,7 @@ class ConsentInput(BaseModel):
         try:
             ipaddress.ip_address(v)
         except ValueError:
-            raise ValueError(f"'{v}' is not a valid IP address")
+            raise ValueError(f"'{v}' is not a valid IP address") from None
         return v
 
 

@@ -5,13 +5,10 @@ from pydantic import ValidationError
 
 from piea.core.consent import (
     CURRENT_CONSENT_TEXT_VERSION,
-    VALID_ATTESTATION_TYPES,
     ConsentInput,
     ConsentRequiredError,
-    ConsentService,
     ConsentValidationError,
 )
-
 
 # ---------------------------------------------------------------------------
 # ConsentInput validation
@@ -155,6 +152,7 @@ class TestConsentServiceAssertValid:
 
         # Simulate bumping the consent text version after record creation.
         import piea.core.consent as consent_mod
+
         monkeypatch.setattr(consent_mod, "CURRENT_CONSENT_TEXT_VERSION", "2.0")
 
         with pytest.raises(ConsentValidationError, match="version"):
