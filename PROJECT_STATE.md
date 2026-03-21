@@ -2,9 +2,9 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-21 — Phase 1 Breach Exposure Module Complete
+**Last updated:** 2026-03-21 — Phase 2 Task T2.6 Graph Crawler Implementation (COMPLETE)
 **Updated by:** Claude Code
-**Current phase:** Phase 1 — Breach exposure module (COMPLETE)
+**Current phase:** Phase 2 — Username enumeration & graph crawler (COMPLETE → T3.1 next)
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
@@ -92,20 +92,27 @@ piea/
 │       │   ├── __init__.py             [Status: created — T1.1]
 │       │   ├── base.py                 [Status: created — T1.1]
 │       │   ├── hibp.py                 [Status: created — T1.1/T1.2/T1.3/T1.4/T1.6]
-│       │   ├── username_enum.py        [Status: not created]
-│       │   ├── graph_crawler.py        [Status: not created]
+│       │   ├── username/
+│       │   │   ├── __init__.py         [Status: created — T2.1]
+│       │   │   ├── platforms.py        [Status: created — T2.1]
+│       │   │   ├── checker.py          [Status: created — T2.2]
+│       │   │   ├── rate_limiter.py     [Status: created — T2.3]
+│       │   │   └── module.py           [Status: created — T2.4]
+│       │   ├── graph_crawler.py        [Status: created — T2.6]
 │       │   ├── search.py              [Status: not created]
 │       │   ├── domain_intel.py         [Status: not created]
 │       │   ├── paste_monitor.py        [Status: not created]
 │       │   └── extractors/
-│       │       ├── __init__.py         [Status: not created]
-│       │       ├── github.py           [Status: not created]
-│       │       ├── mastodon.py         [Status: not created]
-│       │       ├── keybase.py          [Status: not created]
-│       │       ├── gitlab.py           [Status: not created]
-│       │       ├── gravatar.py         [Status: not created]
-│       │       ├── reddit.py           [Status: not created]
-│       │       └── bio_parser.py       [Status: not created]
+│       │       ├── __init__.py         [Status: created — T2.5]
+│       │       ├── models.py           [Status: created — T2.5]
+│       │       ├── base.py             [Status: created — T2.5]
+│       │       ├── bio_parser.py       [Status: created — T2.5]
+│       │       ├── github.py           [Status: created — T2.5]
+│       │       ├── mastodon.py         [Status: created — T2.5]
+│       │       ├── keybase.py          [Status: created — T2.5]
+│       │       ├── gitlab.py           [Status: created — T2.5]
+│       │       ├── gravatar.py         [Status: created — T2.5]
+│       │       └── reddit.py           [Status: created — T2.5]
 │       ├── scoring/
 │       │   ├── __init__.py             [Status: not created]
 │       │   ├── risk_scorer.py          [Status: not created]
@@ -127,7 +134,7 @@ piea/
 │           ├── __init__.py             [Status: not created]
 │           └── scan_task.py            [Status: not created]
 ├── config/
-│   ├── platforms.json                  [Status: not created]
+│   ├── platforms.json                  [Status: created — T2.1]
 │   └── risk_taxonomy.json              [Status: not created]
 ├── frontend/                           [Status: not created — Phase 6]
 ├── tests/
@@ -139,13 +146,19 @@ piea/
 │   │   ├── test_health.py             [Status: created — T0.6]
 │   │   ├── test_consent.py            [Status: created — T0.6]
 │   │   ├── test_scan_request.py       [Status: created — T0.6]
-│   │   └── test_hibp.py              [Status: created — T1.5]
+│   │   ├── test_hibp.py              [Status: created — T1.5]
+│   │   ├── test_username_platforms.py [Status: created — T2.1]
+│   │   ├── test_username_rate_limiter.py [Status: created — T2.3]
+│   │   ├── test_username_checker.py  [Status: created — T2.2]
+│   │   ├── test_username_module.py   [Status: created — T2.4]
+│   │   ├── test_extractors.py        [Status: created — T2.5]
+│   │   └── test_graph_crawler.py      [Status: created — T2.6]
 │   └── integration/
 │       └── __init__.py                 [Status: created — T0.6]
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 40 created / ~65 planned
+**File count:** 67 created / ~65 planned
 **Last hierarchy update:** 2026-03-21
 
 ---
@@ -158,7 +171,7 @@ piea/
 |-------|------|--------|-----------|------------|-------------------|
 | 0 | Project setup & ethics | COMPLETE | 7 | 7 | No — pending `docker compose up` verification |
 | 1 | Breach exposure module | COMPLETE | 6 | 6 | No — pending integration test with real HIBP API key |
-| 2 | Username enum & graph crawler | NOT STARTED | 0 | 14 | No |
+| 2 | Username enum & graph crawler | COMPLETE | 6 | 14 | No — all Phase 2 tasks complete, awaiting Phase 3 |
 | 3 | Search & domain intelligence | NOT STARTED | 0 | 8 | No |
 | 4 | Risk scoring engine | NOT STARTED | 0 | 7 | No |
 | 5 | Scan orchestration & API | NOT STARTED | 0 | 7 | No |
@@ -168,9 +181,13 @@ piea/
 ### 3.2 Current task queue
 
 ```
-NEXT UP:    T2.1 — Build platform registry (300+ sites with URL patterns) (Phase 2 begins)
-AFTER THAT: T2.2 — Implement async username checker with connection pooling
-AFTER THAT: T2.3 — Build per-platform rate limiter (token bucket algorithm)
+COMPLETE:   T2.1 — Build platform registry (62 sites, 13 categories, JSON config)
+COMPLETE:   T2.2 — Implement async username checker with httpx pooling, semaphore(50)
+COMPLETE:   T2.3 — Build per-platform rate limiter (token bucket, exponential backoff, Redis fallback)
+COMPLETE:   T2.4 — Implement UsernameModule (BaseModule interface, batch result aggregation)
+COMPLETE:   T2.5 — Platform-specific extractors (9 files, bio parser, 47 tests, 166 total)
+COMPLETE:   T2.6 — Graph crawler implementation (BFS with rate limiting, 27 tests, 90% coverage)
+NEXT UP:    T3.1 — Search engine enumeration module
 ```
 
 ### 3.3 Completed tasks log
@@ -192,6 +209,12 @@ AFTER THAT: T2.3 — Build per-platform rate limiter (token bucket algorithm)
 | T1.4 | Add response caching with Redis (24h TTL, SHA-256 keyed) | 2026-03-21 | src/piea/core/cache.py, src/piea/modules/hibp.py (cache integration), src/piea/api/dependencies.py (updated) |
 | T1.5 | Write 31 unit tests with mocked API responses (respx) | 2026-03-21 | tests/unit/test_hibp.py |
 | T1.6 | Build breach findings data model (BreachRecord, BaseModule, ModuleFinding, ModuleResult) | 2026-03-21 | src/piea/modules/base.py |
+| T2.1 | Build platform registry with 62 sites (13 categories, JSON config with URL patterns, fixtures) | 2026-03-21 | config/platforms.json, src/piea/modules/username/platforms.py, tests/unit/test_username_platforms.py |
+| T2.2 | Implement async username checker with httpx connection pooling, SSRF prevention, Semaphore(50) | 2026-03-21 | src/piea/modules/username/checker.py, tests/unit/test_username_checker.py |
+| T2.3 | Build token bucket rate limiter with exponential backoff, 429 handling, Redis fallback | 2026-03-21 | src/piea/modules/username/rate_limiter.py, tests/unit/test_username_rate_limiter.py |
+| T2.4 | Implement UsernameModule (BaseModule interface, batch result aggregation, error handling) | 2026-03-21 | src/piea/modules/username/module.py, tests/unit/test_username_module.py, src/piea/modules/username/__init__.py |
+| T2.5 | Implement platform-specific profile extractors (9 modules, bio parser, 47 tests) | 2026-03-21 | src/piea/modules/extractors/__init__.py, models.py, base.py, bio_parser.py, github.py, mastodon.py, keybase.py, gitlab.py, gravatar.py, reddit.py, tests/unit/test_extractors.py |
+| T2.6 | Implement graph crawler with BFS, rate limiting, SQLAlchemy persistence (27 tests, 90% coverage) | 2026-03-21 | src/piea/modules/graph_crawler.py, tests/unit/test_graph_crawler.py |
 
 ---
 
@@ -267,9 +290,225 @@ FILE: src/piea/modules/base.py
 CREATED AT: Task T1.6
 VALUES: critical, high, medium, low, info
 USED BY: hibp.py, base.py (ModuleFinding)
+
+MODEL: PlatformCheckResult (frozen dataclass)
+FILE: src/piea/modules/username/checker.py
+CREATED AT: Task T2.2
+FIELDS:
+  - platform: str
+  - url: str
+  - category: str
+  - status: CheckStatus enum (FOUND, NOT_FOUND, ERROR, RATE_LIMITED)
+  - checked_at: datetime
+  - error_message: str | None
+USED BY: UsernameChecker.check_all_platforms(), UsernameModule.execute()
+
+MODEL: CheckStatus (StrEnum)
+FILE: src/piea/modules/username/checker.py
+CREATED AT: Task T2.2
+VALUES: found, not_found, error, rate_limited
+USED BY: PlatformCheckResult, UsernameChecker
+
+MODEL: Platform (frozen dataclass)
+FILE: src/piea/modules/username/platforms.py
+CREATED AT: Task T2.1
+FIELDS:
+  - name: str
+  - url_pattern: str
+  - category: str
+  - request_timeout: float
+  - http_method: str (default: get)
+USED BY: PlatformRegistry, UsernameChecker
+
+MODEL: ProfileData (frozen dataclass)
+FILE: src/piea/modules/extractors/models.py
+CREATED AT: Task T2.5
+FIELDS:
+  - platform: str
+  - identifier: str
+  - profile_url: str
+  - display_name: str | None
+  - bio: str | None
+  - location: str | None
+  - emails: list[str]
+  - linked_accounts: list[LinkedAccount]
+  - raw_data: dict[str, Any]
+USED BY: BaseExtractor.extract(), graph crawler (T2.6)
+
+MODEL: LinkedAccount (frozen dataclass)
+FILE: src/piea/modules/extractors/models.py
+CREATED AT: Task T2.5
+FIELDS:
+  - identifier: str
+  - profile_url: str
+  - platform: str
+  - evidence_type: str (values: "api_field" | "verified_link" | "bio_mention" | "keybase_proof")
+  - confidence: float
+USED BY: ProfileData.linked_accounts, graph crawler (T2.6)
+
+MODEL: BioToken (frozen dataclass)
+FILE: src/piea/modules/extractors/models.py
+CREATED AT: Task T2.5
+FIELDS:
+  - token_type: str (url, email, mastodon_handle, bare_handle)
+  - raw_value: str
+  - normalized_value: str
+  - platform: str
+  - confidence: float
+USED BY: BioParser.parse(), extractor implementations
 ```
 
-### 4.3 API endpoint registry
+### 4.3 Username module public interfaces
+
+```
+Status: CREATED (Task T2.2-T2.4)
+File: src/piea/modules/username/checker.py, module.py
+
+Interface: UsernameChecker
+  async check_all_platforms(username: str) -> list[PlatformCheckResult]
+  async check_platform(platform: Platform, username: str) -> PlatformCheckResult
+  async close() -> None
+
+Interface: RateLimiterFactory
+  @staticmethod get(platform: str, rpm: int) -> TokenBucketRateLimiter
+
+Interface: TokenBucketRateLimiter
+  async acquire() -> None
+  record_429(retry_after: float) -> None
+
+Interface: UsernameModule (implements BaseModule)
+  name -> "username"
+  async execute(inputs: ScanInputs) -> ModuleResult
+    - Calls check_all_platforms(inputs.username)
+    - Aggregates results into ModuleResult with findings
+    - Handles errors with graceful fallback
+
+Implementation notes:
+  - SSRF prevention: username regex validated before URL construction
+  - Rate limiting: Semaphore(50) for concurrent requests + per-platform token bucket
+  - Redis fallback: In-process dict if Redis unavailable
+  - Result aggregation: _aggregate_results() keeps execute() under 20 lines
+```
+
+### 4.3a Profile extractor interfaces
+
+```
+Status: CREATED (Task T2.5)
+File: src/piea/modules/extractors/
+
+Model: ProfileData (frozen dataclass)
+  - platform: str
+  - identifier: str
+  - profile_url: str
+  - display_name: str | None
+  - bio: str | None
+  - location: str | None
+  - emails: list[str]
+  - linked_accounts: list[LinkedAccount]
+  - raw_data: dict[str, Any]
+
+Model: LinkedAccount (frozen dataclass)
+  - identifier: str
+  - profile_url: str
+  - platform: str
+  - evidence_type: str (values: "api_field" | "verified_link" | "bio_mention" | "keybase_proof")
+  - confidence: float (0.0 to 1.0)
+
+Model: BioToken (frozen dataclass)
+  - token_type: str (url, email, mastodon_handle, bare_handle)
+  - raw_value: str
+  - normalized_value: str
+  - platform: str
+  - confidence: float (0.0 to 1.0)
+
+Interface: BaseExtractor (ABC)
+  async extract(identifier: str) -> ProfileData | None
+  _safe_get(key: str, default: Any) -> Any  [helper complying with L007]
+
+Interface: BioParser
+  parse(text: str) -> list[BioToken]
+    Uses span tracking to avoid overlapping token extraction
+
+Implemented extractors:
+  - GitHubExtractor (api.github.com/users/{username})
+  - MastodonExtractor (multi-instance fallback, verified links confidence=1.0)
+  - KeybaseExtractor (cryptographic proof extraction, confidence=1.0)
+  - GitLabExtractor (gitlab.com/api/v4/users)
+  - GravatarExtractor (MD5(email) identifier, email never transmitted)
+  - RedditExtractor (PIEA User-Agent, 403=suspended=None)
+
+Dependencies:
+  - All extractors comply with L007: httpx.HTTPStatusError caught and re-raised as ModuleAPIError
+  - BioParser uses regex with overlap-aware span tracking
+  - LinkedIn account detection via verified links (confidence=1.0) per Mastodon API response
+```
+
+### 4.3b Graph crawler interface
+
+```
+Status: CREATED (Task T2.6)
+File: src/piea/modules/graph_crawler.py
+
+Configuration: GraphCrawlerConfig (frozen dataclass)
+  - seed_platform: str (e.g., "twitter", "github", "mastodon")
+  - max_depth: int (default: 3, limits BFS traversal)
+  - max_nodes: int (default: 500, limits graph size)
+  - timeout_seconds: float (default: 300.0, total BFS time limit)
+
+State: _BFSState (dataclass, mutable)
+  - nodes: list[GraphNode] — discovered nodes
+  - edges: list[GraphEdge] — discovered edges
+  - errors: list[str] — error messages
+  - queue: asyncio.Queue[(identifier, depth, parent_id)]
+
+Interface: GraphCrawler (implements BaseModule)
+  name -> "graph_crawler"
+  async execute(inputs: ScanInputs, config: GraphCrawlerConfig) -> ModuleResult
+    - Calls _run_bfs(seed_identifier) with async queue
+    - Persists all discovered nodes and edges to database
+    - Returns ModuleResult with findings + metadata
+
+  Private methods:
+  - async _run_bfs(seed_identifier: str) -> _BFSState
+    BFS using asyncio.Queue, respects max_depth and max_nodes
+    visited set keyed on (platform.lower(), identifier.lower())
+    asyncio.wait_for wraps entire BFS for timeout protection
+
+  - async _process_queue_entry(entry, state) -> None
+    Dequeues one (identifier, depth, parent_id) triple
+    Extracts profile via platform extractor
+    Enqueues discovered linked accounts if depth < max_depth
+
+  - async _extract_with_retry(extractor, identifier, errors) -> ProfileData | None
+    Calls extractor.extract(identifier) with MAX_RETRY_ATTEMPTS=3
+    Exponential backoff: 2^attempt seconds
+    Catches and logs errors; no re-raise
+
+  - async _persist_node(profile: ProfileData, depth: int, confidence: float) -> GraphNode
+    Creates SQLAlchemy GraphNode with id=uuid4() set explicitly
+    Fields: platform, identifier, profile_url, depth, confidence, raw_data
+    Returns persisted node for use in edge creation
+
+  - async _persist_edge(source_id: UUID, target_node: GraphNode, linked: LinkedAccount) -> GraphEdge
+    Creates SQLAlchemy GraphEdge with explicit id=uuid4()
+    confidence taken from LinkedAccount.confidence
+    evidence_type from LinkedAccount.evidence_type
+
+  - async _enqueue_linked(profile: ProfileData, parent_id: UUID, depth: int, queue)
+    Iterates profile.linked_accounts
+    Validates identifier against _IDENTIFIER_RE = r"^[a-zA-Z0-9._@\-]{1,500}$"
+    Enqueues if (platform, identifier) not visited and depth < max_depth
+
+Key design notes:
+  - BFS via asyncio.Queue; no max-connections semaphore (extractors have rate limits)
+  - Visited set keyed on (platform.lower(), identifier.lower()) for case-insensitive dedup
+  - asyncio.wait_for wraps entire _run_bfs() — timeout protection (NFR-R3)
+  - GraphNode.id and GraphEdge.id set explicitly at construction (L012 pattern)
+  - Error messages exclude identifiers — no PII leaking (L007 compliance)
+  - _IDENTIFIER_RE validates no slashes/colons in identifiers (NFR-S3)
+```
+
+### 4.4 API endpoint registry
 
 **Track every FastAPI endpoint once created. Future tasks must match these exact paths and schemas.**
 
@@ -286,7 +525,7 @@ RESPONSE MODEL: ScanResponse (from api/schemas/scan_response.py)
 STATUS CODE: 201
 ```
 
-### 4.4 Database table registry
+### 4.5 Database table registry
 
 **Track every SQLAlchemy model and its actual column names once created.**
 
@@ -399,7 +638,7 @@ RELATIONSHIPS:
   - scan → Scan (many-to-one)
 ```
 
-### 4.5 Exception hierarchy
+### 4.6 Exception hierarchy
 
 **Track every custom exception class to prevent duplicate definitions or conflicting hierarchies.**
 
@@ -580,6 +819,14 @@ CONTAINS: Profile with bio, blog, twitter_username, company fields populated
 | ConsentError | src/piea/core/consent.py | Base exception for consent failures |
 | ConsentValidationError | src/piea/core/consent.py | Field-level validation failure |
 | ConsentRequiredError | src/piea/core/consent.py | Scan attempted without valid consent |
+| BaseExtractor | src/piea/modules/extractors/base.py | Abstract base for platform profile extractors |
+| BioParser | src/piea/modules/extractors/bio_parser.py | Regex-based bio text parser with overlap awareness |
+| GitHubExtractor | src/piea/modules/extractors/github.py | Profile extractor for GitHub API |
+| MastodonExtractor | src/piea/modules/extractors/mastodon.py | Profile extractor for Mastodon with multi-instance support |
+| KeybaseExtractor | src/piea/modules/extractors/keybase.py | Cryptographic proof extractor for Keybase |
+| GitLabExtractor | src/piea/modules/extractors/gitlab.py | Profile extractor for GitLab API |
+| GravatarExtractor | src/piea/modules/extractors/gravatar.py | Avatar service profile extractor (MD5-based) |
+| RedditExtractor | src/piea/modules/extractors/reddit.py | Profile extractor for Reddit with User-Agent |
 
 ### Function names (public API)
 
@@ -619,7 +866,12 @@ T4.2 (risk scorer) DEPENDS ON:
   - T1.6: BreachFinding must have .severity and .data_classes fields
 ```
 
-Status: No dependencies logged yet — will be populated as tasks complete.
+T2.6 (graph crawler) DEPENDS ON:
+  - T2.5: BaseExtractor.extract() returns ProfileData with linked_accounts
+  - T2.5: ProfileData.linked_accounts must contain (identifier, platform, profile_url, confidence, evidence_type)
+  - T2.5: BioParser.parse() returns list[BioToken] with token_type and normalized_value for link extraction
+  - T2.1: Platform registry must be available for profile URL validation
+  - T2.2: UsernameChecker must remain available for recursive checking during graph traversal
 
 ---
 

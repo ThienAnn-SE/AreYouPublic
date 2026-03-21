@@ -1,0 +1,622 @@
+[
+  {
+    "platform": "GitHub",
+    "url_pattern": "https://github.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "GitLab",
+    "url_pattern": "https://gitlab.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Bitbucket",
+    "url_pattern": "https://bitbucket.org/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "npm",
+    "url_pattern": "https://www.npmjs.com/~{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "PyPI",
+    "url_pattern": "https://pypi.org/user/{username}/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Stack Overflow",
+    "url_pattern": "https://stackoverflow.com/users/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "HackerNews",
+    "url_pattern": "https://news.ycombinator.com/user?id={username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "CodePen",
+    "url_pattern": "https://codepen.io/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Replit",
+    "url_pattern": "https://replit.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Twitter",
+    "url_pattern": "https://twitter.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 15,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Instagram",
+    "url_pattern": "https://www.instagram.com/{username}/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 10,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Facebook",
+    "url_pattern": "https://www.facebook.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 10,
+    "check_method": "GET"
+  },
+  {
+    "platform": "LinkedIn",
+    "url_pattern": "https://www.linkedin.com/in/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 10,
+    "check_method": "GET"
+  },
+  {
+    "platform": "TikTok",
+    "url_pattern": "https://www.tiktok.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 10,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Pinterest",
+    "url_pattern": "https://www.pinterest.com/{username}/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Tumblr",
+    "url_pattern": "https://{username}.tumblr.com/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Snapchat",
+    "url_pattern": "https://www.snapchat.com/add/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 10,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Reddit",
+    "url_pattern": "https://www.reddit.com/user/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "forum",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Quora",
+    "url_pattern": "https://www.quora.com/profile/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "forum",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Medium",
+    "url_pattern": "https://medium.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "blogging",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Dev.to",
+    "url_pattern": "https://dev.to/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "blogging",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Hashnode",
+    "url_pattern": "https://hashnode.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "blogging",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Substack",
+    "url_pattern": "https://substack.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "blogging",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Blogger",
+    "url_pattern": "https://{username}.blogspot.com/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "blogging",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Steam",
+    "url_pattern": "https://steamcommunity.com/id/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Xbox",
+    "url_pattern": "https://xboxgamertag.com/search/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "PlayStation",
+    "url_pattern": "https://psnprofiles.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Twitch",
+    "url_pattern": "https://www.twitch.tv/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Roblox",
+    "url_pattern": "https://www.roblox.com/user.aspx?username={username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Itch.io",
+    "url_pattern": "https://{username}.itch.io/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Dribbble",
+    "url_pattern": "https://dribbble.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "design",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Behance",
+    "url_pattern": "https://www.behance.net/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "design",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "DeviantArt",
+    "url_pattern": "https://www.deviantart.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "design",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "ArtStation",
+    "url_pattern": "https://www.artstation.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "design",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Flickr",
+    "url_pattern": "https://www.flickr.com/people/{username}/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "photography",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "500px",
+    "url_pattern": "https://500px.com/p/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "photography",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "YouTube",
+    "url_pattern": "https://www.youtube.com/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "video",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Vimeo",
+    "url_pattern": "https://vimeo.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "video",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "SoundCloud",
+    "url_pattern": "https://soundcloud.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "music",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Spotify",
+    "url_pattern": "https://open.spotify.com/user/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "music",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Last.fm",
+    "url_pattern": "https://www.last.fm/user/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "music",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Bandcamp",
+    "url_pattern": "https://bandcamp.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "music",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Keybase",
+    "url_pattern": "https://keybase.io/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "security",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "HackerOne",
+    "url_pattern": "https://hackerone.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "security",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Bugcrowd",
+    "url_pattern": "https://bugcrowd.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "security",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Gravatar",
+    "url_pattern": "https://gravatar.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "identity",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "About.me",
+    "url_pattern": "https://about.me/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "identity",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Patreon",
+    "url_pattern": "https://www.patreon.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "monetization",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Ko-fi",
+    "url_pattern": "https://ko-fi.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "monetization",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Buy Me a Coffee",
+    "url_pattern": "https://buymeacoffee.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "monetization",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Mastodon (social.vivaldi.net)",
+    "url_pattern": "https://social.vivaldi.net/@{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Bluesky",
+    "url_pattern": "https://bsky.app/profile/{username}.bsky.social",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "social_media",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Linktree",
+    "url_pattern": "https://linktr.ee/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "identity",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Letterboxd",
+    "url_pattern": "https://letterboxd.com/{username}/",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "entertainment",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Goodreads",
+    "url_pattern": "https://www.goodreads.com/user/show/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "entertainment",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Chess.com",
+    "url_pattern": "https://www.chess.com/member/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Lichess",
+    "url_pattern": "https://lichess.org/@/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "gaming",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 60,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Kaggle",
+    "url_pattern": "https://www.kaggle.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "HuggingFace",
+    "url_pattern": "https://huggingface.co/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "development",
+    "has_public_api": true,
+    "rate_limit_requests_per_minute": 30,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Freelancer",
+    "url_pattern": "https://www.freelancer.com/u/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "professional",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Upwork",
+    "url_pattern": "https://www.upwork.com/freelancers/~{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "professional",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  },
+  {
+    "platform": "Fiverr",
+    "url_pattern": "https://www.fiverr.com/{username}",
+    "expected_status_found": 200,
+    "expected_status_not_found": 404,
+    "category": "professional",
+    "has_public_api": false,
+    "rate_limit_requests_per_minute": 20,
+    "check_method": "GET"
+  }
+]
