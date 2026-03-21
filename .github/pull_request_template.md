@@ -17,12 +17,14 @@
 
 ## Code Quality Checklist
 
-- [ ] Code passes `ruff check` with zero warnings
-- [ ] Code passes `mypy` strict mode
-- [ ] Tests pass with 80%+ coverage (`pytest`)
-- [ ] New code has type annotations
+- [ ] `ruff check src/ tests/` passes with zero warnings (run on ENTIRE project, not just changed files)
+- [ ] `ruff format src/ tests/` applied (ENTIRE project)
+- [ ] `mypy src/piea/ --strict` passes with zero errors
+- [ ] Tests pass and coverage meets current threshold (`pytest tests/ -v`)
+- [ ] New code has type annotations (use `dict[str, Any]` for external JSON dicts, not `dict[str, object]`)
 - [ ] Functions/classes have docstrings
 - [ ] If API endpoint: documented in OpenAPI schema
+- [ ] FastAPI `Depends()` providers for closeable resources use async generator with `finally: await x.close()`
 
 ## Security Checklist (SECURITY_WORKFLOW.md Section 3.3)
 

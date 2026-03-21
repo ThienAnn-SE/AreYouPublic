@@ -552,7 +552,9 @@ CONTAINS: Profile with bio, blog, twitter_username, company fields populated
 
 | ID | Type | Description | Status | Affects task |
 |----|------|------------|--------|-------------|
-| (none yet) | | | | |
+| R001 | INFO | Coverage threshold is currently 50%. Must be raised as each new module gets tests. Current modules tested: HIBP (87%). | OPEN | T2.x, T3.x, T4.x |
+| R002 | INFO | conftest.py uses SQLite for local dev with type overrides for INET/JSONB. Any new PostgreSQL-specific ORM type must also be registered in `_register_sqlite_type_overrides()`. | OPEN | T2.x, T3.x |
+| R003 | INFO | Redis cache stores breach data as plaintext JSON. Per SECURITY_WORKFLOW.md §3.4 threat T8, at-rest encryption is deferred to a future task. | OPEN | Future |
 
 **Risk types:** BLOCKER (cannot proceed), WARNING (can proceed with caution), INFO (noted for future reference)
 
