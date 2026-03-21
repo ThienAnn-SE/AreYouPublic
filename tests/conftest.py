@@ -1,8 +1,8 @@
 """Shared pytest fixtures for PIEA tests.
 
 Fixture hierarchy:
-  - db_session:  async SQLAlchemy session backed by an in-process SQLite
-                 engine (overrides PostgreSQL-specific types for unit tests)
+  - db_session:  async SQLAlchemy session backed by PostgreSQL (CI) or
+                 in-process SQLite (local dev without DATABASE_URL set)
   - client:      httpx.AsyncClient wired to the FastAPI app via ASGITransport
   - consent_service: ConsentService bound to the test db_session
 
@@ -10,36 +10,52 @@ Integration tests that need real PostgreSQL should use a separate conftest
 with a docker-based engine (added in later phases).
 """
 
+from __future__ import annotations
+
+import os
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock
-from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from piea.db.models import Base
+
+
+def _register_sqlite_type_overrides(engine):
+    """Register type adapters so PostgreSQL-specific column types
+    (INET, JSONB, PG_UUID) work with SQLite for unit tests."""
+    from sqlalchemy.dialects.sqlite.base import SQLiteTypeCompiler
+
+    if not hasattr(SQLiteTypeCompiler, "visit_INET"):
+        SQLiteTypeCompiler.visit_INET = lambda self, type_, **kw: "VARCHAR(45)"
+    if not hasattr(SQLiteTypeCompiler, "visit_JSONB"):
+        SQLiteTypeCompiler.visit_JSONB = lambda self, type_, **kw: "TEXT"
 
 
 # ---------------------------------------------------------------------------
 # Database fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def db_engine():
-    """Create an async SQLite engine for unit tests.
+    """Create an async database engine for tests.
 
-    SQLite lacks INET and JSONB, so we register type adapters at the
-    dialect level. For unit tests this is sufficient — integration tests
-    use real PostgreSQL.
+    Uses DATABASE_URL environment variable if set (CI with PostgreSQL),
+    otherwise falls back to SQLite in-memory for local development.
     """
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-        echo=False,
-    )
+    database_url = os.environ.get("DATABASE_URL")
 
-    # Create all tables from the ORM metadata.
+    if database_url:
+        engine = create_async_engine(database_url, echo=False)
+    else:
+        engine = create_async_engine(
+            "sqlite+aiosqlite:///:memory:",
+            echo=False,
+        )
+        _register_sqlite_type_overrides(engine)
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -72,16 +88,19 @@ async def db_session(db_engine) -> AsyncGenerator[AsyncSession, None]:
 # Service fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def consent_service(db_session):
     """Provide a ConsentService bound to the test session."""
     from piea.core.consent import ConsentService
+
     return ConsentService(db_session)
 
 
 # ---------------------------------------------------------------------------
 # HTTP client fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def client(db_session) -> AsyncGenerator[httpx.AsyncClient, None]:

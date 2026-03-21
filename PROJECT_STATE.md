@@ -2,9 +2,9 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-21 — Security Workflow Setup
+**Last updated:** 2026-03-21 — Phase 1 Breach Exposure Module Complete
 **Updated by:** Claude Code
-**Current phase:** Phase 0 — Project setup and ethical foundation
+**Current phase:** Phase 1 — Breach exposure module (COMPLETE)
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
@@ -86,12 +86,12 @@ piea/
 │       │   ├── consent.py              [Status: created — T0.4]
 │       │   ├── orchestrator.py         [Status: not created]
 │       │   ├── rate_limiter.py         [Status: not created]
-│       │   ├── cache.py                [Status: not created]
+│       │   ├── cache.py                [Status: created — T1.4]
 │       │   └── audit.py                [Status: not created]
 │       ├── modules/
-│       │   ├── __init__.py             [Status: not created]
-│       │   ├── base.py                 [Status: not created]
-│       │   ├── hibp.py                 [Status: not created]
+│       │   ├── __init__.py             [Status: created — T1.1]
+│       │   ├── base.py                 [Status: created — T1.1]
+│       │   ├── hibp.py                 [Status: created — T1.1/T1.2/T1.3/T1.4/T1.6]
 │       │   ├── username_enum.py        [Status: not created]
 │       │   ├── graph_crawler.py        [Status: not created]
 │       │   ├── search.py              [Status: not created]
@@ -138,13 +138,14 @@ piea/
 │   │   ├── __init__.py                 [Status: created — T0.6]
 │   │   ├── test_health.py             [Status: created — T0.6]
 │   │   ├── test_consent.py            [Status: created — T0.6]
-│   │   └── test_scan_request.py       [Status: created — T0.6]
+│   │   ├── test_scan_request.py       [Status: created — T0.6]
+│   │   └── test_hibp.py              [Status: created — T1.5]
 │   └── integration/
 │       └── __init__.py                 [Status: created — T0.6]
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 35 created / ~65 planned
+**File count:** 40 created / ~65 planned
 **Last hierarchy update:** 2026-03-21
 
 ---
@@ -156,7 +157,7 @@ piea/
 | Phase | Name | Status | Tasks done | Tasks total | Milestone verified |
 |-------|------|--------|-----------|------------|-------------------|
 | 0 | Project setup & ethics | COMPLETE | 7 | 7 | No — pending `docker compose up` verification |
-| 1 | Breach exposure module | NOT STARTED | 0 | 6 | No |
+| 1 | Breach exposure module | COMPLETE | 6 | 6 | No — pending integration test with real HIBP API key |
 | 2 | Username enum & graph crawler | NOT STARTED | 0 | 14 | No |
 | 3 | Search & domain intelligence | NOT STARTED | 0 | 8 | No |
 | 4 | Risk scoring engine | NOT STARTED | 0 | 7 | No |
@@ -167,9 +168,9 @@ piea/
 ### 3.2 Current task queue
 
 ```
-NEXT UP:    T1.1 — Implement HIBP API v3 client (Phase 1 begins)
-AFTER THAT: T1.2 — Build breach data parser and severity classifier
-AFTER THAT: T1.3 — Implement password hash check (k-anonymity model)
+NEXT UP:    T2.1 — Build platform registry (300+ sites with URL patterns) (Phase 2 begins)
+AFTER THAT: T2.2 — Implement async username checker with connection pooling
+AFTER THAT: T2.3 — Build per-platform rate limiter (token bucket algorithm)
 ```
 
 ### 3.3 Completed tasks log
@@ -185,6 +186,12 @@ AFTER THAT: T1.3 — Implement password hash check (k-anonymity model)
 | T0.7 | Write LEGAL.md with terms of use and disclaimer | 2026-03-21 | LEGAL.md |
 | GitHub | Initialize git repo, create GitHub repository, CI/CD, branch protection | 2026-03-21 | .gitignore, .env.example, .github/workflows/ci.yml, .github/pull_request_template.md, README.md, LICENSE, pyproject.toml (updated URLs) |
 | Security | Security workflow with 4 gates, secret scanning CI, pre-commit hooks, PROCESS.md Phase 5S | 2026-03-21 | SECURITY_WORKFLOW.md, .github/workflows/security.yml, .pre-commit-config.yaml, .gitignore (updated), PROCESS.md (updated — Phase 5S added), .github/workflows/ci.yml (updated — master branch) |
+| T1.1 | Implement HIBP API v3 client with API key auth, rate limiting, retry with exponential backoff | 2026-03-21 | src/piea/modules/__init__.py, src/piea/modules/base.py, src/piea/modules/hibp.py |
+| T1.2 | Build breach data parser and severity classifier (Critical/High/Medium/Low based on data classes) | 2026-03-21 | src/piea/modules/hibp.py (classify_breach_severity, BreachRecord) |
+| T1.3 | Implement password hash check using k-anonymity range endpoint | 2026-03-21 | src/piea/modules/hibp.py (HIBPClient.check_password_hash) |
+| T1.4 | Add response caching with Redis (24h TTL, SHA-256 keyed) | 2026-03-21 | src/piea/core/cache.py, src/piea/modules/hibp.py (cache integration), src/piea/api/dependencies.py (updated) |
+| T1.5 | Write 31 unit tests with mocked API responses (respx) | 2026-03-21 | tests/unit/test_hibp.py |
+| T1.6 | Build breach findings data model (BreachRecord, BaseModule, ModuleFinding, ModuleResult) | 2026-03-21 | src/piea/modules/base.py |
 
 ---
 
@@ -195,10 +202,42 @@ AFTER THAT: T1.3 — Implement password hash check (k-anonymity model)
 ### 4.1 Base module interface
 
 ```
-Status: NOT YET CREATED (Task T2.1)
+Status: CREATED (Task T1.1)
 File: src/piea/modules/base.py
-Contract: TBD
-Implemented by: (none yet)
+
+Contract:
+  class BaseModule(ABC):
+    @property name -> str                      # unique module identifier
+    async execute(inputs: ScanInputs) -> ModuleResult   # main scan logic
+    async close() -> None                       # resource cleanup
+
+  ScanInputs(frozen dataclass):
+    - email: str | None
+    - username: str | None
+    - full_name: str | None
+
+  ModuleResult(frozen dataclass):
+    - module_name: str
+    - success: bool
+    - findings: list[ModuleFinding]
+    - errors: list[str]
+    - cached: bool
+    - metadata: dict[str, object]
+
+  ModuleFinding(frozen dataclass):
+    - finding_type: str
+    - severity: Severity (StrEnum: critical/high/medium/low/info)
+    - category: str
+    - title: str
+    - description: str
+    - platform: str | None
+    - evidence: dict[str, object]
+    - remediation_action: str
+    - remediation_effort: str
+    - remediation_url: str | None
+    - weight: float
+
+Implemented by: HIBPModule (src/piea/modules/hibp.py)
 ```
 
 ### 4.2 Data models registry
@@ -206,21 +245,28 @@ Implemented by: (none yet)
 **Track every dataclass and Pydantic model here once created. Include the exact field names and types so future tasks reference the real implementation, not the SRS specification.**
 
 ```
-Status: NO MODELS CREATED YET
-
-When models are created, log them here in this format:
-
-MODEL: IdentityNode
-FILE: src/piea/graph/models.py
-CREATED AT: Task T2.11
+MODEL: BreachRecord (frozen dataclass, slots=True)
+FILE: src/piea/modules/hibp.py
+CREATED AT: Task T1.6
 FIELDS:
-  - platform: str
-  - identifier: str
-  - profile_url: str
-  - confidence: float
-  - discovered_at_depth: int
-  - raw_data: dict[str, object]
-USED BY: graph_crawler.py, serializer.py, orchestrator.py
+  - name: str
+  - title: str
+  - domain: str
+  - breach_date: str
+  - added_date: str
+  - pwn_count: int
+  - description: str
+  - data_classes: list[str]
+  - is_verified: bool = False
+  - is_sensitive: bool = False
+  - severity: Severity = Severity.LOW
+USED BY: hibp.py (HIBPClient, HIBPModule)
+
+MODEL: Severity (StrEnum)
+FILE: src/piea/modules/base.py
+CREATED AT: Task T1.6
+VALUES: critical, high, medium, low, info
+USED BY: hibp.py, base.py (ModuleFinding)
 ```
 
 ### 4.3 API endpoint registry

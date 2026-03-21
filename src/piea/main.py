@@ -1,13 +1,12 @@
 """FastAPI application entry point for PIEA."""
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from piea.api.routes import health, scans, reports
-from piea.config import settings
+from piea.api.routes import health, reports, scans
 
 
 @asynccontextmanager
@@ -17,6 +16,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     # Shutdown: dispose the connection pool cleanly.
     from piea.db.session import engine
+
     await engine.dispose()
 
 

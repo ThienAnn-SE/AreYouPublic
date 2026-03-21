@@ -4,10 +4,12 @@ This module defines all database tables and relationships for the
 Public Information Exposure Analyzer.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID, uuid4
-from sqlalchemy import String, Text, Float, Integer, ForeignKey, func
-from sqlalchemy.dialects.postgresql import JSONB, INET, UUID as PG_UUID
+
+from sqlalchemy import Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import INET, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -20,7 +22,9 @@ class ConsentRecord(Base):
 
     __tablename__ = "consent_records"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     attestation_type: Mapped[str] = mapped_column(String(50), nullable=False)
     operator_name: Mapped[str] = mapped_column(String(255), nullable=False)
     operator_ip: Mapped[str] = mapped_column(INET, nullable=False)
@@ -38,7 +42,9 @@ class Scan(Base):
 
     __tablename__ = "scans"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     consent_record_id: Mapped[UUID] = mapped_column(
         ForeignKey("consent_records.id"), nullable=False
     )
@@ -77,7 +83,9 @@ class Finding(Base):
 
     __tablename__ = "findings"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     scan_id: Mapped[UUID] = mapped_column(ForeignKey("scans.id"), nullable=False)
     type: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -100,7 +108,9 @@ class GraphNode(Base):
 
     __tablename__ = "graph_nodes"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     scan_id: Mapped[UUID] = mapped_column(ForeignKey("scans.id"), nullable=False)
     platform: Mapped[str] = mapped_column(String(100), nullable=False)
     identifier: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -125,7 +135,9 @@ class GraphEdge(Base):
 
     __tablename__ = "graph_edges"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     scan_id: Mapped[UUID] = mapped_column(ForeignKey("scans.id"), nullable=False)
     source_node_id: Mapped[UUID] = mapped_column(
         ForeignKey("graph_nodes.id"), nullable=False
@@ -151,7 +163,9 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
 
-    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
     scan_id: Mapped[UUID] = mapped_column(ForeignKey("scans.id"), nullable=False)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     event_data: Mapped[dict] = mapped_column(JSONB, nullable=False)

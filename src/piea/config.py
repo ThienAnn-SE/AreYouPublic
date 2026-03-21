@@ -42,8 +42,8 @@ class Settings(BaseSettings):
     scan_rate_limit_per_hour: int = 10
 
     # --- Cache TTLs (seconds) ---
-    cache_ttl_breach: int = 86400   # 24 hours
-    cache_ttl_profile: int = 3600   # 1 hour
+    cache_ttl_breach: int = 86400  # 24 hours
+    cache_ttl_profile: int = 3600  # 1 hour
 
     # --- Application ---
     log_level: str = "INFO"

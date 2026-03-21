@@ -1,7 +1,5 @@
 """Pydantic models for scan creation requests."""
 
-from uuid import UUID
-
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 
@@ -53,7 +51,9 @@ class ScanRequest(BaseModel):
     @classmethod
     def username_no_whitespace(cls, v: str | None) -> str | None:
         if v is not None and v != v.strip():
-            raise ValueError("target_username must not have leading or trailing whitespace")
+            raise ValueError(
+                "target_username must not have leading or trailing whitespace"
+            )
         return v
 
     @model_validator(mode="after")
