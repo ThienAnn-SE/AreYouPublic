@@ -1,0 +1,47 @@
+repos:
+  # --- Secret detection ---
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: package-lock\.json|\.env\.example
+
+  # --- Prevent committing sensitive files ---
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=500"]
+      - id: detect-private-key
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-json
+      - id: check-yaml
+      - id: check-toml
+
+  # --- Python code quality (already in CI, also enforce locally) ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  # --- Custom: block real PII in source ---
+  - repo: local
+    hooks:
+      - id: no-real-emails
+        name: Block real email addresses in source
+        entry: bash -c 'grep -rn --include="*.py" --include="*.json" -E "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" "$@" | grep -ivE "@(example\.(com|org|net)|test\.com|localhost|test\.example)" && echo "ERROR: Real email addresses found. Use @example.com or @test.com instead." && exit 1 || exit 0'
+        language: system
+        pass_filenames: true
+        types_or: [python, json]
+
+      - id: no-env-files
+        name: Block .env files from being committed
+        entry: bash -c 'for f in "$@"; do case "$f" in .env|.env.*) if [ "$f" != ".env.example" ]; then echo "ERROR: Blocked $f — never commit environment files"; exit 1; fi;; esac; done'
+        language: system
+        pass_filenames: true
+        always_run: true

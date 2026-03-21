@@ -21,7 +21,19 @@ ENV/
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_ed25519
 credentials.json
+service-account*.json
+*-credentials.json
+*.secret
+secrets.yaml
+secrets.yml
+.secrets.baseline
 
 # IDE
 .idea/
@@ -50,6 +62,8 @@ docker-compose.override.yml
 # Database
 *.db
 *.sqlite3
+*.dump
+*.sql.gz
 
 # Celery
 celerybeat-schedule
