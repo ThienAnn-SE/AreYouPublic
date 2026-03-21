@@ -431,6 +431,8 @@ For every file created or modified in Phase 5:
 
   1. Search for hardcoded API keys, passwords, tokens, or credentials
      Pattern: (api_key|secret|password|token|credential)\s*[:=]\s*["'][^"']{8,}
+     NOTE: Exclude test files from this scan — they legitimately contain dummy
+     credentials. Run on src/ only, or use ':!tests/' ':!*test_*' in git pathspec.
 
   2. Search for private key material
      Pattern: -----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----
@@ -541,6 +543,12 @@ TESTS RUN:    [count]
 TESTS PASSED: [count]
 TESTS FAILED: [count]
 ```
+
+**After adding tests for a new module, update the coverage threshold:**
+Check the measured coverage percentage in the pytest output. If it is higher than
+the current `--cov-fail-under` in `pyproject.toml` AND `.github/workflows/ci.yml`,
+raise the threshold to the new measured value (round down to nearest 5%). Never set
+it higher than what the test suite currently achieves.
 
 ### Step 6.3 — Decision gate
 
@@ -697,12 +705,15 @@ pytest tests/ -v --tb=short
 ```bash
 # All five gates must pass:
 mypy src/piea/ --strict                    # Zero errors
-ruff check src/piea/ tests/                # Zero warnings
-ruff format --check src/piea/ tests/       # Already formatted
+ruff check src/piea/ tests/                # Zero warnings — ENTIRE project, not just changed files
+ruff format --check src/piea/ tests/       # Already formatted — ENTIRE project
 pytest tests/ -v --tb=short                # All pass
 # Security gate (Phase 5S must have passed — verify no regressions):
-git diff --cached -- '*.py' '*.json' | grep -iE '(api_key|secret|password|token)\s*[:=]\s*["'"'"'][^"'"'"']{8,}' && exit 1 || true
+# NOTE: Exclude tests/ from secret scan to avoid false positives on dummy test credentials
+git diff --cached -- 'src/*.py' '*.json' ':!tests/' | grep -iE '(api_key|secret|password|token)\s*[:=]\s*["'"'"'][^"'"'"']{8,}' && exit 1 || true
 ```
+
+**Why run ruff on the ENTIRE project?** Import changes in one file (adding `from x import y`) can create `F401 unused import` errors in another file that previously re-exported it. Running on changed files only misses these cross-file interactions.
 
 ### Step 7.2 — Update PROJECT_STATE.md
 

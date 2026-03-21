@@ -1054,6 +1054,10 @@ The following patterns are explicitly banned in this project. If Claude Code wri
 | `typing.Any` without comment | Defeats type safety | Add `# type: ignore[...]` with explanation |
 | Global mutable state | Thread/async unsafe | Use dependency injection |
 | Nested functions deeper than 1 level | Hard to test, hard to read | Extract to module-level functions |
+| `dict[str, object]` for external JSON | `.get()` returns `object`, breaking mypy overload resolution | Use `dict[str, Any]` for any external API response |
+| `def get_X() -> X: return X()` FastAPI Depends() for closeable resource | Connection leak — `close()` never called | Use `async def get_X() -> AsyncGenerator[X, None]` with `finally: await x.close()` |
+| `response.raise_for_status()` without catching `httpx.HTTPStatusError` on URL-based endpoints | Leaks PII from URL in exception message | Catch and re-raise as domain error with sanitized message |
+| `await asyncio.sleep()` after async call (not in `finally`) inside rate-limit semaphore | Sleep skipped on exception, violating rate limit | Always put rate-limit sleep in `finally` block |
 
 ---
 
@@ -1065,14 +1069,16 @@ Claude Code must run the following checks after every file is written or modifie
 # Type checking — must pass with zero errors
 mypy src/piea/ --strict
 
-# Linting — must pass with zero warnings
+# Linting — must pass with zero warnings (run on ENTIRE project, not just changed files)
 ruff check src/piea/ tests/
 
-# Formatting — must be applied
+# Formatting — must be applied (run on ENTIRE project)
 ruff format src/piea/ tests/
 
 # Tests — must pass
 pytest tests/ -v --tb=short
 ```
+
+**Critical:** Always run `ruff check` and `ruff format` on the **entire** `src/` and `tests/` directories, not just the files you modified. Import changes in one file can create `F401`/`I001` errors in another file.
 
 If any check fails, fix the issue before reporting the task as complete. Never skip these checks.

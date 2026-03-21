@@ -92,6 +92,36 @@ Schedule (weekly) → scan entire repository history
 | GitHub secret scanning alerts | Automatic detection of known provider patterns |
 | Dependency vulnerability scan | Known CVEs in project dependencies |
 
+#### TruffleHog Action configuration rules (CRITICAL)
+
+The `trufflesecurity/trufflehog` GitHub Action's internal wrapper script automatically appends `--fail` and `--no-update` to every invocation. **Never pass these flags in `extra_args`** — it will crash with `error: flag 'fail' cannot be repeated`.
+
+```yaml
+# CORRECT — only pass scan-behavior flags
+- uses: trufflesecurity/trufflehog@main
+  with:
+    extra_args: --only-verified   # DO NOT add --fail or --no-update here
+
+# WRONG — crashes the job
+- uses: trufflesecurity/trufflehog@main
+  with:
+    extra_args: --only-verified --fail  # duplicate flag error
+```
+
+#### High-entropy string scan — test file exclusion (CRITICAL)
+
+When running a `git diff | grep` regex scan for high-entropy strings (pattern: `api[_-]?key|secret|password|token`), always exclude test files. Test code legitimately contains dummy credentials for mock setups.
+
+```bash
+# CORRECT — excludes test directories
+git diff origin/master...HEAD -- . ':!tests/' ':!*test_*' \
+  | grep -iE "(api[_-]?key|secret|password|token)..."
+
+# WRONG — false positives on dummy test API keys like api_key="no-key-needed"
+git diff origin/master...HEAD \
+  | grep -iE "(api[_-]?key|secret|password|token)..."
+```
+
 ### 3.3 Gate 3: Code review checklist (human review)
 
 **When:** Every pull request before merge
