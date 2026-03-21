@@ -79,5 +79,9 @@ frontend/dist/
 frontend/build/
 .next/
 
-# Claude Code
-.claude/
+# Claude Code — ignore personal/runtime files, but version-control shared project config
+.claude/settings.local.json
+.claude/agent-memory/
+.claude/agent-memory-local/
+.claude/agent-log.txt
+.claude/__pycache__/
