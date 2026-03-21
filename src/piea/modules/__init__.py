@@ -3,3 +3,7 @@
 Each module implements BaseModule and is responsible for querying a single
 external data source, parsing responses, and returning structured findings.
 """
+
+from piea.modules.search import SearchModule
+
+__all__ = ["SearchModule"]
