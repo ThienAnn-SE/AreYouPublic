@@ -375,7 +375,9 @@ class TestBuildQueries:
 
     def test_max_three_queries_even_with_all_inputs(self):
         queries = self.module._build_queries(
-            ScanInputs(full_name="Alice", email="alice@example.com", username="alice123")
+            ScanInputs(
+                full_name="Alice", email="alice@example.com", username="alice123"
+            )
         )
         assert len(queries) <= 3
 
