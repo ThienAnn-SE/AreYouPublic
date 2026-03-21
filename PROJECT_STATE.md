@@ -2,9 +2,10 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-21 — Task T0.7
+**Last updated:** 2026-03-21 — GitHub Integration Setup
 **Updated by:** Claude Code
 **Current phase:** Phase 0 — Project setup and ethical foundation
+**Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
 
@@ -22,6 +23,10 @@
 | Cache/Broker | Redis 7 |
 | Task queue | Celery 5.3 |
 | Deployment | Docker Compose |
+| Repository | https://github.com/ThienAnn-SE/AreYouPublic |
+| Default branch | master |
+| CI/CD | GitHub Actions (lint, type-check, test) |
+| Branch protection | master — requires CI Pass status check |
 | Reference documents | PROJECT_PLAN.md, SRS.md, CODING_RULES.md |
 
 ---
@@ -32,11 +37,18 @@
 
 ```
 piea/
+├── .gitignore                          [Status: created — GitHub setup]
+├── .env.example                        [Status: created — GitHub setup]
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml                      [Status: created — GitHub setup]
+│   └── pull_request_template.md        [Status: created — GitHub setup]
 ├── docker-compose.yml                  [Status: created — T0.2]
 ├── Dockerfile                          [Status: created — T0.2]
-├── pyproject.toml                      [Status: created — T0.1]
+├── pyproject.toml                      [Status: created — T0.1, updated — GitHub setup]
 ├── alembic.ini                         [Status: created — T0.3]
-├── .env.example                        [Status: not created]
+├── LICENSE                             [Status: created — GitHub setup]
+├── README.md                           [Status: created — GitHub setup]
 ├── PROGRESS.md                         [Status: not created]
 ├── INSTALL_LOG.md                      [Status: not created]
 ├── PROJECT_STATE.md                    [Status: THIS FILE]
@@ -45,7 +57,6 @@ piea/
 ├── CODING_RULES.md                     [Status: reference doc]
 ├── CLAUDE_CODE_PROMPT.md               [Status: reference doc]
 ├── LEGAL.md                            [Status: created — T0.7]
-├── README.md                           [Status: not created]
 ├── alembic/
 │   ├── env.py                          [Status: created — T0.3]
 │   └── versions/
@@ -129,7 +140,7 @@ piea/
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 26 created / ~65 planned  
+**File count:** 32 created / ~65 planned
 **Last hierarchy update:** 2026-03-21
 
 ---
@@ -168,6 +179,7 @@ AFTER THAT: T1.3 — Implement password hash check (k-anonymity model)
 | T0.5 | Build API scaffolding | 2026-03-21 | src/piea/config.py, src/piea/main.py, src/piea/db/session.py (updated), src/piea/api/__init__.py, src/piea/api/dependencies.py, src/piea/api/routes/__init__.py, src/piea/api/routes/health.py, src/piea/api/routes/scans.py, src/piea/api/routes/reports.py, src/piea/api/schemas/__init__.py, src/piea/api/schemas/scan_request.py, src/piea/api/schemas/scan_response.py |
 | T0.6 | Set up pytest fixtures and test infrastructure | 2026-03-21 | pyproject.toml (updated), tests/__init__.py, tests/conftest.py, tests/unit/__init__.py, tests/unit/test_health.py, tests/unit/test_consent.py, tests/unit/test_scan_request.py, tests/integration/__init__.py |
 | T0.7 | Write LEGAL.md with terms of use and disclaimer | 2026-03-21 | LEGAL.md |
+| GitHub | Initialize git repo, create GitHub repository, CI/CD, branch protection | 2026-03-21 | .gitignore, .env.example, .github/workflows/ci.yml, .github/pull_request_template.md, README.md, LICENSE, pyproject.toml (updated URLs) |
 
 ---
 
@@ -376,6 +388,9 @@ PIEAError (base)
 | D3 | Strict consent version enforcement — any version mismatch rejects the record | Operator chose option A; maximises legal clarity over UX convenience | T0.4 | core/consent.py, future API |
 | D4 | ConsentService uses db.flush() not db.commit() — caller owns the transaction | Correct pattern for services nested in FastAPI dependency-injected sessions | T0.4 | core/consent.py, api/dependencies.py |
 | D5 | LEGAL.md is the canonical source for consent text and report disclaimer | Single source of truth; consent.py version constant must stay in sync | T0.7 | LEGAL.md, core/consent.py, future report generator |
+| D6 | Use GitHub Actions for CI/CD, not external CI services | Integrated with GitHub, free for public repos, native PR checks | GitHub setup | .github/workflows/ci.yml |
+| D7 | Branch protection on master requires "CI Pass" status check | Prevents merging broken code; CI Pass is a composite job that gates on lint+typecheck+test | GitHub setup | GitHub repo settings |
+| D8 | Default branch is master (not main) | User preference | GitHub setup | All git workflows |
 
 ---
 
@@ -411,6 +426,11 @@ src/piea/modules/hibp.py
 
 | Item | Status | Version | Notes |
 |------|--------|---------|-------|
+| Git | INSTALLED | — | Repository initialized |
+| GitHub CLI (gh) | INSTALLED | 2.88.1 | Authenticated as ThienAnn-SE |
+| GitHub repo | CREATED | — | https://github.com/ThienAnn-SE/AreYouPublic (public) |
+| GitHub Actions CI | CONFIGURED | — | Runs on PR to master and push to master |
+| Branch protection | CONFIGURED | — | master requires CI Pass status |
 | Python | NOT VERIFIED | — | Required: 3.11+ |
 | Node.js | NOT VERIFIED | — | Required: 20+ |
 | Docker | NOT VERIFIED | — | Required: 24+ |
