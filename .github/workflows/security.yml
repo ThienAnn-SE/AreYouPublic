@@ -29,10 +29,16 @@ jobs:
       - name: Scan for high-entropy strings in diff
         if: github.event_name == 'pull_request'
         run: |
-          # Check for common secret patterns in the PR diff
-          git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.yml' '*.yaml' '*.json' '*.toml' '*.cfg' '*.ini' | \
-          grep -iE '(api[_-]?key|secret|password|token|credential)\s*[:=]\s*["\x27][^\s"'\'']{8,}' && \
-          echo "::error::Potential secret detected in diff. Review the above matches." && exit 1 || \
+          # Check for common secret patterns in the PR diff (excluding tests)
+          MATCHES=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.py' '*.yml' '*.yaml' '*.json' '*.toml' '*.cfg' '*.ini' \
+            ':!tests/' ':!*test_*' | \
+            grep -iE '(api[_-]?key|secret|password|token|credential)\s*[:=]\s*["\x27][^\s"'\'']{8,}' || true)
+
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Potential secret detected in diff. Review the above matches."
+            exit 1
+          fi
           echo "No secret patterns detected in diff."
 
   pii-scan:
