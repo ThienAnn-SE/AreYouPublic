@@ -2,7 +2,7 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-21 — GitHub Integration Setup
+**Last updated:** 2026-03-21 — Security Workflow Setup
 **Updated by:** Claude Code
 **Current phase:** Phase 0 — Project setup and ethical foundation
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
@@ -25,9 +25,10 @@
 | Deployment | Docker Compose |
 | Repository | https://github.com/ThienAnn-SE/AreYouPublic |
 | Default branch | master |
-| CI/CD | GitHub Actions (lint, type-check, test) |
-| Branch protection | master — requires CI Pass status check |
-| Reference documents | PROJECT_PLAN.md, SRS.md, CODING_RULES.md |
+| CI/CD | GitHub Actions (lint, type-check, test, security scan) |
+| Branch protection | master — requires CI Pass + Security Pass status checks |
+| Security workflow | SECURITY_WORKFLOW.md — 4 gates: pre-commit, CI, review, runtime |
+| Reference documents | PROJECT_PLAN.md, SRS.md, CODING_RULES.md, SECURITY_WORKFLOW.md |
 
 ---
 
@@ -39,10 +40,13 @@
 piea/
 ├── .gitignore                          [Status: created — GitHub setup]
 ├── .env.example                        [Status: created — GitHub setup]
+├── .pre-commit-config.yaml             [Status: created — Security setup]
 ├── .github/
 │   ├── workflows/
-│   │   └── ci.yml                      [Status: created — GitHub setup]
+│   │   ├── ci.yml                      [Status: created — GitHub setup, updated — Security setup]
+│   │   └── security.yml                [Status: created — Security setup]
 │   └── pull_request_template.md        [Status: created — GitHub setup]
+├── SECURITY_WORKFLOW.md                [Status: created — Security setup]
 ├── docker-compose.yml                  [Status: created — T0.2]
 ├── Dockerfile                          [Status: created — T0.2]
 ├── pyproject.toml                      [Status: created — T0.1, updated — GitHub setup]
@@ -140,7 +144,7 @@ piea/
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 32 created / ~65 planned
+**File count:** 35 created / ~65 planned
 **Last hierarchy update:** 2026-03-21
 
 ---
@@ -180,6 +184,7 @@ AFTER THAT: T1.3 — Implement password hash check (k-anonymity model)
 | T0.6 | Set up pytest fixtures and test infrastructure | 2026-03-21 | pyproject.toml (updated), tests/__init__.py, tests/conftest.py, tests/unit/__init__.py, tests/unit/test_health.py, tests/unit/test_consent.py, tests/unit/test_scan_request.py, tests/integration/__init__.py |
 | T0.7 | Write LEGAL.md with terms of use and disclaimer | 2026-03-21 | LEGAL.md |
 | GitHub | Initialize git repo, create GitHub repository, CI/CD, branch protection | 2026-03-21 | .gitignore, .env.example, .github/workflows/ci.yml, .github/pull_request_template.md, README.md, LICENSE, pyproject.toml (updated URLs) |
+| Security | Security workflow with 4 gates, secret scanning CI, pre-commit hooks, PROCESS.md Phase 5S | 2026-03-21 | SECURITY_WORKFLOW.md, .github/workflows/security.yml, .pre-commit-config.yaml, .gitignore (updated), PROCESS.md (updated — Phase 5S added), .github/workflows/ci.yml (updated — master branch) |
 
 ---
 
@@ -391,6 +396,10 @@ PIEAError (base)
 | D6 | Use GitHub Actions for CI/CD, not external CI services | Integrated with GitHub, free for public repos, native PR checks | GitHub setup | .github/workflows/ci.yml |
 | D7 | Branch protection on master requires "CI Pass" status check | Prevents merging broken code; CI Pass is a composite job that gates on lint+typecheck+test | GitHub setup | GitHub repo settings |
 | D8 | Default branch is master (not main) | User preference | GitHub setup | All git workflows |
+| D9 | Security verification (Phase 5S) is mandatory between implementation and testing | Prevents secrets/PII from reaching CI logs or git history; defense in depth | Security setup | PROCESS.md, SECURITY_WORKFLOW.md |
+| D10 | Branch protection requires both CI Pass AND Security Pass | Two independent gate jobs ensure code quality and security are verified separately | Security setup | GitHub repo settings |
+| D11 | Test data must use RFC 2606/5737 synthetic identifiers only | Prevents accidental PII in public git history and CI logs | Security setup | SECURITY_WORKFLOW.md Section 5 |
+| D12 | PII must be hashed or redacted in log statements at INFO level or below | Prevents PII exposure via log aggregators; aligns with GDPR data minimization | Security setup | SECURITY_WORKFLOW.md Section 3.4 |
 
 ---
 
@@ -430,7 +439,9 @@ src/piea/modules/hibp.py
 | GitHub CLI (gh) | INSTALLED | 2.88.1 | Authenticated as ThienAnn-SE |
 | GitHub repo | CREATED | — | https://github.com/ThienAnn-SE/AreYouPublic (public) |
 | GitHub Actions CI | CONFIGURED | — | Runs on PR to master and push to master |
-| Branch protection | CONFIGURED | — | master requires CI Pass status |
+| GitHub Actions Security | CONFIGURED | — | Secret scan, PII scan, dependency audit, file classification |
+| Branch protection | CONFIGURED | — | master requires CI Pass + Security Pass |
+| Pre-commit hooks | CONFIGURED | — | detect-secrets, private-key detection, PII patterns |
 | Python | NOT VERIFIED | — | Required: 3.11+ |
 | Node.js | NOT VERIFIED | — | Required: 20+ |
 | Docker | NOT VERIFIED | — | Required: 24+ |

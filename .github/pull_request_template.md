@@ -15,15 +15,24 @@
 - [ ] Documentation update
 - [ ] Test improvement
 
-## Checklist
+## Code Quality Checklist
 
 - [ ] Code passes `ruff check` with zero warnings
 - [ ] Code passes `mypy` strict mode
 - [ ] Tests pass with 80%+ coverage (`pytest`)
 - [ ] New code has type annotations
 - [ ] Functions/classes have docstrings
-- [ ] No secrets or credentials in the code
 - [ ] If API endpoint: documented in OpenAPI schema
+
+## Security Checklist (SECURITY_WORKFLOW.md Section 3.3)
+
+- [ ] No real API keys, tokens, or passwords in the diff
+- [ ] No real email addresses, names, or IP addresses in source code or test data
+- [ ] Test fixtures use synthetic data only (`@example.com`, `192.0.2.x`, etc.)
+- [ ] Error messages do not expose PII (field values, emails, IPs)
+- [ ] Log statements do not include raw PII (use hashed or redacted forms)
+- [ ] New environment variables are documented in `.env.example` (empty values only)
+- [ ] No `.env`, `.pem`, `.key`, or credential files in the diff
 
 ## Test Plan
 

@@ -12,7 +12,7 @@
 ## Process overview
 
 ```
-For EVERY task, execute these 7 phases in order:
+For EVERY task, execute these 8 phases in order:
 
   PHASE 1: REQUIREMENT ANALYSIS
       ↓
@@ -24,6 +24,9 @@ For EVERY task, execute these 7 phases in order:
   PHASE 4: PRE-IMPLEMENTATION CHECKLIST
       ↓
   PHASE 5: IMPLEMENTATION
+      ↓
+  PHASE 5S: SECURITY VERIFICATION  ← MANDATORY — see SECURITY_WORKFLOW.md
+      ↓  (if secrets/PII found → FIX before proceeding)
       ↓
   PHASE 6: TESTING AND VALIDATION
       ↓  (if test fails → PHASE 6B: FAILURE ANALYSIS → loop back to PHASE 5)
@@ -417,6 +420,89 @@ mypy src/piea/[module]/[file].py --strict
 
 ---
 
+## PHASE 5S: SECURITY VERIFICATION
+
+**Goal:** Verify that no secrets, credentials, or real PII have been introduced in the implementation. This phase is MANDATORY and must not be skipped. See `SECURITY_WORKFLOW.md` for the full security policy.
+
+### Step 5S.1 — Scan for secrets in new/modified files
+
+```
+For every file created or modified in Phase 5:
+
+  1. Search for hardcoded API keys, passwords, tokens, or credentials
+     Pattern: (api_key|secret|password|token|credential)\s*[:=]\s*["'][^"']{8,}
+
+  2. Search for private key material
+     Pattern: -----BEGIN (RSA |EC |DSA )?PRIVATE KEY-----
+
+  3. Verify no .env files are staged
+     Command: git diff --cached --name-only | grep -E '^\.env'
+
+  If ANY secret is found:
+    → REMOVE the secret immediately
+    → Replace with environment variable reference or empty default
+    → Re-run the scan
+    → Do NOT proceed to Phase 6 until clean
+```
+
+### Step 5S.2 — Scan for PII in source code and test data
+
+```
+For every file created or modified in Phase 5:
+
+  1. Search for real email addresses (excluding RFC 2606 reserved domains)
+     Allowed: @example.com, @example.org, @example.net, @test.com
+     Blocked: Any other domain in source code or test fixtures
+
+  2. Search for real names (developer names, real person names)
+     Allowed: "Test User", "Alice Scanner", "Bob Target", "Jane Operator"
+     Blocked: Any real person's name
+
+  3. Search for non-documentation IP addresses in source code
+     Allowed: 127.0.0.1, 192.0.2.x, 198.51.100.x, 203.0.113.x
+     Blocked: Real IPs in non-config Python files
+
+  4. Verify test fixtures use synthetic data
+     Check: All JSON fixtures must contain "_synthetic": true
+     Check: All identifiers must match SECURITY_WORKFLOW.md Section 5.1
+
+  If ANY real PII is found:
+    → Replace with synthetic equivalent from SECURITY_WORKFLOW.md Section 5.1
+    → Re-run the scan
+    → Do NOT proceed to Phase 6 until clean
+```
+
+### Step 5S.3 — Verify error handling does not leak PII
+
+```
+For every new exception handler or log statement in Phase 5:
+
+  1. Error messages must NOT include raw PII values
+     WRONG: f"User {email} not found"
+     RIGHT: f"User with email hash {hash_email(email)[:8]}... not found"
+
+  2. Log statements at INFO level or below must NOT include raw PII
+     WRONG: logger.info(f"Scanning target: {target_name}")
+     RIGHT: logger.info(f"Scanning target: {input_name_hash[:8]}...")
+
+  3. API error responses must NOT include stack traces in production
+     Verify: FastAPI debug mode is disabled for non-development environments
+```
+
+### Step 5S.4 — Security verification result
+
+```
+SECURITY VERIFICATION:
+  Secrets scan:          [PASS / FAIL — details]
+  PII scan:              [PASS / FAIL — details]
+  Error handling review: [PASS / FAIL — details]
+
+  If ALL pass: → Proceed to Phase 6
+  If ANY fail: → Fix and re-scan before proceeding
+```
+
+---
+
 ## PHASE 6: TESTING AND VALIDATION
 
 **Goal:** Prove the implementation satisfies every acceptance criterion.
@@ -609,11 +695,13 @@ pytest tests/ -v --tb=short
 ### Step 7.1 — Final quality check
 
 ```bash
-# All four gates must pass:
+# All five gates must pass:
 mypy src/piea/ --strict                    # Zero errors
 ruff check src/piea/ tests/                # Zero warnings
 ruff format --check src/piea/ tests/       # Already formatted
 pytest tests/ -v --tb=short                # All pass
+# Security gate (Phase 5S must have passed — verify no regressions):
+git diff --cached -- '*.py' '*.json' | grep -iE '(api_key|secret|password|token)\s*[:=]\s*["'"'"'][^"'"'"']{8,}' && exit 1 || true
 ```
 
 ### Step 7.2 — Update PROJECT_STATE.md
@@ -712,6 +800,7 @@ PREVIOUS TASK COMPLIANCE CHECK:
   [ ] Phase 3 completed — skills assessed (3B if needed)
   [ ] Phase 4 completed — pre-implementation checklist passed
   [ ] Phase 5 completed — code written and quality-gated
+  [ ] Phase 5S completed — security verification passed (SECURITY_WORKFLOW.md)
   [ ] Phase 6 completed — all tests pass, all criteria verified
   [ ] Phase 6B completed — all failures logged in FAIL.md and LEARN.md (if any failures occurred)
   [ ] Phase 7 completed — PROJECT_STATE.md, PROGRESS.md, LEARN.md updated
