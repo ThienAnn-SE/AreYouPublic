@@ -17,6 +17,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 import httpx
 
@@ -54,42 +55,48 @@ MAX_BACKOFF_SECONDS = 60.0
 # Data classes that determine severity classification.
 # These sets are used by classify_breach_severity() to map HIBP's
 # "DataClasses" field to our severity tiers.
-CRITICAL_DATA_CLASSES = frozenset({
-    "Passwords",
-    "Plaintext passwords",
-    "Password hints",
-    "Financial data",
-    "Credit cards",
-    "Bank account numbers",
-    "Credit card CVV",
-    "Credit status information",
-    "Partial credit card data",
-})
+CRITICAL_DATA_CLASSES = frozenset(
+    {
+        "Passwords",
+        "Plaintext passwords",
+        "Password hints",
+        "Financial data",
+        "Credit cards",
+        "Bank account numbers",
+        "Credit card CVV",
+        "Credit status information",
+        "Partial credit card data",
+    }
+)
 
-HIGH_DATA_CLASSES = frozenset({
-    "Phone numbers",
-    "Physical addresses",
-    "Government issued IDs",
-    "Passport numbers",
-    "Social security numbers",
-    "National IDs",
-    "Tax IDs",
-    "Driver's licenses",
-    "Dates of birth",
-})
+HIGH_DATA_CLASSES = frozenset(
+    {
+        "Phone numbers",
+        "Physical addresses",
+        "Government issued IDs",
+        "Passport numbers",
+        "Social security numbers",
+        "National IDs",
+        "Tax IDs",
+        "Driver's licenses",
+        "Dates of birth",
+    }
+)
 
-MEDIUM_DATA_CLASSES = frozenset({
-    "Email addresses",
-    "Usernames",
-    "IP addresses",
-    "Device information",
-    "Employers",
-    "Job titles",
-    "Geographic locations",
-    "Genders",
-    "Names",
-    "Purchases",
-})
+MEDIUM_DATA_CLASSES = frozenset(
+    {
+        "Email addresses",
+        "Usernames",
+        "IP addresses",
+        "Device information",
+        "Employers",
+        "Job titles",
+        "Geographic locations",
+        "Genders",
+        "Names",
+        "Purchases",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -247,12 +254,10 @@ class HIBPClient:
             raise ModuleAPIError(
                 "hibp", exc.response.status_code, "Breach lookup failed"
             ) from None
-        raw_breaches: list[dict[str, object]] = response.json()
+        raw_breaches: list[dict[str, Any]] = response.json()
 
         breaches = [self._parse_breach(raw) for raw in raw_breaches]
-        logger.info(
-            "Found %d breaches for email hash %s", len(breaches), email_hash
-        )
+        logger.info("Found %d breaches for email hash %s", len(breaches), email_hash)
         return breaches
 
     async def check_password_hash(self, sha1_prefix: str) -> dict[str, int]:
@@ -275,7 +280,9 @@ class HIBPClient:
             ModuleAPIError: If the API returns an unexpected error.
             ModuleTimeoutError: If the request times out.
         """
-        if len(sha1_prefix) != 5 or not all(c in "0123456789abcdefABCDEF" for c in sha1_prefix):
+        if len(sha1_prefix) != 5 or not all(
+            c in "0123456789abcdefABCDEF" for c in sha1_prefix
+        ):
             raise ValueError("sha1_prefix must be exactly 5 hex characters")
 
         url = f"{HIBP_PASSWORDS_BASE}/range/{sha1_prefix}"
@@ -288,7 +295,9 @@ class HIBPClient:
                 response = await pw_client.get(url)
                 response.raise_for_status()
             except httpx.TimeoutException as exc:
-                raise ModuleTimeoutError("hibp", "Password range request timed out") from exc
+                raise ModuleTimeoutError(
+                    "hibp", "Password range request timed out"
+                ) from exc
             except httpx.HTTPStatusError as exc:
                 raise ModuleAPIError(
                     "hibp", exc.response.status_code, "Password range API error"
@@ -348,12 +357,12 @@ class HIBPClient:
                 return response
 
             # Handle rate limiting with exponential backoff
-            retry_after = float(
-                response.headers.get("Retry-After", str(backoff))
-            )
+            retry_after = float(response.headers.get("Retry-After", str(backoff)))
             logger.warning(
                 "HIBP rate limited (attempt %d/%d), waiting %.1fs",
-                attempt, MAX_RETRIES, retry_after,
+                attempt,
+                MAX_RETRIES,
+                retry_after,
             )
             await asyncio.sleep(retry_after)
             backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
@@ -361,7 +370,7 @@ class HIBPClient:
         raise RateLimitExceededError("hibp", retry_after=backoff)
 
     @staticmethod
-    def _parse_breach(raw: dict[str, object]) -> BreachRecord:
+    def _parse_breach(raw: dict[str, Any]) -> BreachRecord:
         """Parse a raw HIBP API breach response into a BreachRecord.
 
         Args:
@@ -370,7 +379,7 @@ class HIBPClient:
         Returns:
             A fully populated BreachRecord with severity classified.
         """
-        data_classes = list(raw.get("DataClasses", []))  # type: ignore[arg-type]
+        data_classes = list(raw.get("DataClasses", []))
         severity = classify_breach_severity(data_classes)
 
         return BreachRecord(
@@ -379,7 +388,7 @@ class HIBPClient:
             domain=str(raw.get("Domain", "")),
             breach_date=str(raw.get("BreachDate", "")),
             added_date=str(raw.get("AddedDate", "")),
-            pwn_count=int(raw.get("PwnCount", 0)),  # type: ignore[arg-type]
+            pwn_count=int(raw.get("PwnCount", 0)),
             description=re.sub(r"<[^>]+>", "", str(raw.get("Description", ""))),
             data_classes=data_classes,
             is_verified=bool(raw.get("IsVerified", False)),

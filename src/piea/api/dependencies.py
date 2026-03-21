@@ -15,7 +15,9 @@ from piea.db.session import get_db
 from piea.modules.hibp import HIBPClient, HIBPModule
 
 
-async def get_session(db: AsyncSession = Depends(get_db)) -> AsyncGenerator[AsyncSession, None]:
+async def get_session(
+    db: AsyncSession = Depends(get_db),
+) -> AsyncGenerator[AsyncSession, None]:
     """Re-export the DB session dependency under a shorter name."""
     yield db
 

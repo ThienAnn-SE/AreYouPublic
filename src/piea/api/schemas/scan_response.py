@@ -19,7 +19,7 @@ class ScanStatusResponse(BaseModel):
     """Response body for GET /api/v1/scans/{scan_id}."""
 
     scan_id: UUID
-    status: str          # queued | running | completed | failed
+    status: str  # queued | running | completed | failed
     risk_score: int | None
     risk_tier: str | None
     started_at: datetime | None
