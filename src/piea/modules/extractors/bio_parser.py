@@ -18,7 +18,7 @@ from piea.modules.extractors.models import BioToken
 # Compiled patterns (in priority order — most specific first)
 # ---------------------------------------------------------------------------
 
-# Mastodon: @user@instance.tld — must be checked before plain email
+# Mastodon double-@ handle format — must be checked before plain email pattern
 _RE_MASTODON = re.compile(r"@([a-zA-Z0-9_.-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})")
 
 # Plain email addresses (RFC 5322 simplified)
@@ -66,7 +66,7 @@ class BioParser:
     All methods are stateless — the class holds no mutable state.
     Usage::
 
-        tokens = BioParser().parse("Find me at https://github.com/alice or @alice@mastodon.example.com")
+        tokens = BioParser().parse("Find me at https://github.com/alice or @alice@example.com")
     """
 
     def parse(self, text: str) -> list[BioToken]:
