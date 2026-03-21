@@ -1,37 +1,48 @@
 # PROCESS.md — Internal Self-Execution Standard Operating Procedure
 
-**Version:** 1.0  
-**Purpose:** This document defines the mandatory step-by-step process Claude Code must follow for every task. It is not a guideline — it is the execution engine. Every step must be performed in order. No step may be skipped.  
+**Version:** 2.0
+**Purpose:** This document defines the mandatory step-by-step process Claude Code must follow for every task. It is not a guideline — it is the execution engine. Every step must be performed in order. No step may be skipped.
 **Companion files:**
 - `FAIL.md` — Failure log with root cause analysis (created on first failure)
 - `LEARN.md` — Accumulated learnings and patterns (created on first learning)
 - `skills/` — Directory of task-specific skill documents (created as needed)
+
+**Subagent delegation (mandatory — not optional):**
+- `@agent-process-executor` — Phases 1-4 research and planning (preserves main context)
+- `@agent-code-reviewer` — After every file written in Phase 5 (Haiku model, keeps review out of main context)
+- `@agent-security-auditor` — Phase 5S gate (replaces manual grep patterns)
+- `@agent-state-updater` — Phase 7 document updates (Steps 7.2-7.4)
 
 ---
 
 ## Process overview
 
 ```
-For EVERY task, execute these 8 phases in order:
+For EVERY task, execute these phases in order:
 
-  PHASE 1: REQUIREMENT ANALYSIS
-      ↓
-  PHASE 2: DEPENDENCY MAPPING
-      ↓
-  PHASE 3: SKILL ASSESSMENT
-      ↓  (if skill gap found → PHASE 3B: SKILL CREATION)
-      ↓
-  PHASE 4: PRE-IMPLEMENTATION CHECKLIST
+  ┌─ DELEGATE → @agent-process-executor ──────────────────────┐
+  │  PHASE 1: REQUIREMENT ANALYSIS                             │
+  │      ↓                                                     │
+  │  PHASE 2: DEPENDENCY MAPPING                               │
+  │      ↓                                                     │
+  │  PHASE 3: SKILL ASSESSMENT                                 │
+  │      ↓  (if skill gap → PHASE 3B: SKILL CREATION)         │
+  │      ↓                                                     │
+  │  PHASE 4: PRE-IMPLEMENTATION CHECKLIST                     │
+  └────────────────────────────── returns: implementation plan ┘
       ↓
   PHASE 5: IMPLEMENTATION
+      ↓  after each file → DELEGATE → @agent-code-reviewer
       ↓
-  PHASE 5S: SECURITY VERIFICATION  ← MANDATORY — see SECURITY_WORKFLOW.md
-      ↓  (if secrets/PII found → FIX before proceeding)
+  PHASE 5S: SECURITY VERIFICATION
+      ↓  DELEGATE → @agent-security-auditor  (MANDATORY)
+      ↓  (if FAIL → FIX before proceeding)
       ↓
   PHASE 6: TESTING AND VALIDATION
       ↓  (if test fails → PHASE 6B: FAILURE ANALYSIS → loop back to PHASE 5)
       ↓
   PHASE 7: COMPLETION AND STATE UPDATE
+      ↓  DELEGATE → @agent-state-updater  (Steps 7.2-7.4)
 ```
 
 ---
@@ -39,6 +50,29 @@ For EVERY task, execute these 8 phases in order:
 ## PHASE 1: REQUIREMENT ANALYSIS
 
 **Goal:** Understand exactly what the task requires before touching any code.
+
+### Step 1.0 — Delegate to @agent-process-executor  ← START HERE
+
+**Before doing any manual research, delegate Phases 1-4 to the process-executor subagent.** This preserves main conversation context and runs research in an isolated window.
+
+```
+Invoke: @agent-process-executor
+Prompt: "Run the full planning process for task [TASK ID]: [TASK DESCRIPTION]"
+
+The agent will:
+  - Read PROJECT_STATE.md, FAIL.md, LEARN.md, SRS.md
+  - Map all dependencies (upstream and downstream)
+  - Assess skill gaps
+  - Run the Phase 4 readiness checklist
+  - Return a complete implementation plan
+
+When the agent returns:
+  - Review the plan for correctness
+  - If it flags a ⛔ BLOCKED item → resolve it before proceeding
+  - If the plan is complete → proceed to Phase 5 using the returned plan
+```
+
+The manual steps below (1.1-1.4) document what the agent executes internally. They serve as a reference and fallback if the agent cannot be used.
 
 ### Step 1.1 — Identify the task
 
@@ -418,11 +452,58 @@ mypy src/piea/[module]/[file].py --strict
 #   3. Do NOT proceed to the next file until all gates pass
 ```
 
+### Step 5.4 — Delegate to @agent-code-reviewer  ← MANDATORY after each file
+
+**After all quality gates pass, delegate a code review to the code-reviewer subagent.** The review output stays in the agent's context and does not flood the main conversation.
+
+```
+Invoke: @agent-code-reviewer
+Prompt: "Review the files I just wrote: [list file paths]"
+
+The agent will check:
+  - Naming conventions (snake_case, PascalCase, UPPER_SNAKE_CASE)
+  - Function rules (single responsibility, ≤20 lines, ≤3 params, typed)
+  - Type safety (dict[str, Any] for JSON, specific exceptions)
+  - Security patterns (L007 error re-raise, L008 DI cleanup, L009 semaphore sleep)
+  - Async correctness
+
+On "Critical" findings → fix before proceeding to Phase 5S
+On "Warning" findings → fix if time allows; log in FAIL.md if deferred
+On "Suggestion" findings → log in LEARN.md; apply in next task
+```
+
 ---
 
 ## PHASE 5S: SECURITY VERIFICATION
 
 **Goal:** Verify that no secrets, credentials, or real PII have been introduced in the implementation. This phase is MANDATORY and must not be skipped. See `SECURITY_WORKFLOW.md` for the full security policy.
+
+### Step 5S.0 — Delegate to @agent-security-auditor  ← START HERE
+
+**Before running any manual checks, delegate the full security audit to the security-auditor subagent.**
+
+```
+Invoke: @agent-security-auditor
+Prompt: "Run Phase 5S security audit on the files I just implemented"
+
+The agent runs all 6 gates:
+  Gate 1: Secret detection (API keys, tokens, passwords)
+  Gate 2: PII exposure (real emails, IPs, names)
+  Gate 3: Error handling security (PII in error messages)
+  Gate 4: Input validation (Pydantic validators, SQL injection)
+  Gate 5: Rate limiting (semaphore + finally block pattern per L009)
+  Gate 6: Dependency vulnerabilities (pip-audit, only when pyproject.toml changed)
+
+On "FAIL" result:
+  → Fix EVERY flagged item
+  → Re-invoke @agent-security-auditor
+  → Do NOT proceed to Phase 6 until the audit returns "PASS ✓"
+
+On "PASS ✓" result:
+  → Proceed to Phase 6
+```
+
+The manual steps below (5S.1-5S.4) document what the agent executes. They serve as a reference and fallback if the agent cannot be used.
 
 ### Step 5S.1 — Scan for secrets in new/modified files
 
@@ -715,7 +796,30 @@ git diff --cached -- 'src/*.py' '*.json' ':!tests/' | grep -iE '(api_key|secret|
 
 **Why run ruff on the ENTIRE project?** Import changes in one file (adding `from x import y`) can create `F401 unused import` errors in another file that previously re-exported it. Running on changed files only misses these cross-file interactions.
 
-### Step 7.2 — Update PROJECT_STATE.md
+### Step 7.2 — Delegate to @agent-state-updater  ← MANDATORY before step 7.3
+
+**Before manually editing any living document, delegate all state updates to the state-updater subagent.** This keeps verbose file edits out of the main conversation and ensures consistent update format.
+
+```
+Invoke: @agent-state-updater
+Prompt: "Task [TASK ID] is complete. Here is a summary: [paste the completion report
+         from Step 7.1]. Files created/modified: [list]. Any failures encountered: [yes/no,
+         and F-IDs if yes]. Any new patterns learned: [yes/no, and description if yes]."
+
+The agent will update:
+  - PROJECT_STATE.md — Sections 2, 3, 4, 5, 6, 8, 9, 11, 12
+  - FAIL.md — new failure entries (if any failures occurred in Phase 6B)
+  - LEARN.md — new learning entries (if new patterns discovered)
+
+When the agent returns:
+  - It will confirm what was updated in each document
+  - It will name the next task from PROJECT_PLAN.md
+
+The manual steps below (7.3-7.4) document what the agent executes. They serve as a
+reference and fallback if the agent cannot be used.
+```
+
+### Step 7.3 — Update PROJECT_STATE.md (manual fallback)
 
 Follow the update instructions in PROJECT_STATE.md exactly. Specifically:
 
@@ -806,19 +910,24 @@ EFFECTIVENESS: [HIGH / MEDIUM / LOW — updated after use]
 
 ```
 PREVIOUS TASK COMPLIANCE CHECK:
-  [ ] Phase 1 completed — requirements analyzed
-  [ ] Phase 2 completed — dependencies mapped
+  [ ] @agent-process-executor ran and returned an implementation plan (Phase 1-4)
+  [ ] Phase 1 completed — requirements analyzed (no unanswered questions)
+  [ ] Phase 2 completed — dependencies mapped and verified
   [ ] Phase 3 completed — skills assessed (3B if needed)
   [ ] Phase 4 completed — pre-implementation checklist passed
-  [ ] Phase 5 completed — code written and quality-gated
-  [ ] Phase 5S completed — security verification passed (SECURITY_WORKFLOW.md)
+  [ ] Phase 5 completed — code written and quality-gated (ruff, mypy per file)
+  [ ] @agent-code-reviewer ran — Critical findings fixed, Warnings resolved or logged
+  [ ] @agent-security-auditor ran and returned PASS ✓ (Phase 5S)
+  [ ] Phase 5S completed — security verification passed (no manual overrides)
   [ ] Phase 6 completed — all tests pass, all criteria verified
   [ ] Phase 6B completed — all failures logged in FAIL.md and LEARN.md (if any failures occurred)
-  [ ] Phase 7 completed — PROJECT_STATE.md, PROGRESS.md, LEARN.md updated
+  [ ] @agent-state-updater ran — PROJECT_STATE.md, FAIL.md, LEARN.md updated (Phase 7)
+  [ ] Phase 7 completed — completion report presented, next task identified
 
 If any checkbox is unchecked:
   → Go back and complete it before starting the new task
   → Do NOT carry forward incomplete work
+  → Do NOT skip agent delegation steps — they enforce context isolation
 ```
 
 ---
