@@ -19,6 +19,9 @@
 | L007 | 2026-03-21 | Task T1.5 (positive) | security | httpx, error-handling, pii | Catch `httpx.HTTPStatusError` and re-raise as domain error to prevent email leaking in error messages |
 | L008 | 2026-03-21 | Task T1.5 (positive) | framework | fastapi, dependency-injection, resource-management | FastAPI DI providers must be async generators with `finally` for resource cleanup |
 | L009 | 2026-03-21 | Task T1.5 (positive) | security | asyncio, rate-limiting, semaphore | Rate-limit sleep must be in `finally` block inside semaphore to prevent bypass on exception |
+| L010 | 2026-03-21 | Task T2.4 (positive) | pattern | module-design, execute-pattern, result-aggregation | Extract result aggregation logic to dedicated method to keep execute() under 20 lines |
+| L011 | 2026-03-21 | Task T2.5 (positive) | pattern | profile-extraction, bio-parsing, regex | Use span tracking in regex extraction to avoid overlapping token matches in bio text |
+| L012 | 2026-03-21 | Task T2.6 (positive) | pattern | sqlalchemy, orm, id-generation, unit-testing | Set SQLAlchemy UUID ids explicitly at object construction time for test usability |
 
 ---
 
@@ -301,6 +304,172 @@ async with self._rate_semaphore:
 ### Applies to
 Any future module that calls a rate-limited external API (T2.x platform APIs, T3.x enrichment).
 
+---
+
+## L010 — Extract result aggregation to keep execute() under 20 lines
+
+**Date:** 2026-03-21
+**Source:** Task T2.4 (positive — code structure finding)
+**Category:** pattern
+**Tags:** module-design, execute-pattern, result-aggregation, maintainability
+
+### Learning
+When a module's `execute()` method calls a high-level operation that returns many results (e.g., `UsernameChecker.check_all_platforms()` returns 60+ platform results), aggregating those into ModuleFindings inline makes `execute()` unwieldy. Extract the aggregation logic into a dedicated helper method (`_aggregate_results()`) to keep the main flow clear.
+
+### Rule
+Any `execute()` method longer than 20 lines should have its core logic extracted into helper methods. The main flow should read like pseudocode: "call API, aggregate results, return finding".
+
+### Example
+```python
+# BEFORE (execute too long, hard to follow)
+async def execute(self, inputs: ScanInputs) -> ModuleResult:
+    if not inputs.username:
+        return ModuleResult(...)
+    results = await self._checker.check_all_platforms(inputs.username)
+    findings = []
+    for result in results:
+        if result.status == CheckStatus.FOUND:
+            findings.append(ModuleFinding(...))
+        elif result.status == CheckStatus.ERROR:
+            # handle error...
+    return ModuleResult(findings=findings, ...)
+
+# AFTER (clear separation of concerns)
+async def execute(self, inputs: ScanInputs) -> ModuleResult:
+    if not inputs.username:
+        return ModuleResult(...)
+    results = await self._checker.check_all_platforms(inputs.username)
+    findings = self._aggregate_results(results)
+    return ModuleResult(findings=findings, success=True, ...)
+
+def _aggregate_results(self, results: list[PlatformCheckResult]) -> list[ModuleFinding]:
+    findings = []
+    for result in results:
+        if result.status == CheckStatus.FOUND:
+            findings.append(...)
+        elif result.status == CheckStatus.ERROR:
+            # error handling...
+    return findings
+```
+
+### Applies to
+T2.5, T2.6 (graph crawler), T3.x (search modules), and any future module with complex result processing.
+
+---
+
+## L011 — Use span tracking in regex extraction to avoid overlapping token matches
+
+**Date:** 2026-03-21
+**Source:** Task T2.5 (positive — bio parser implementation)
+**Category:** pattern
+**Tags:** bio-parsing, regex, token-extraction, overlap-avoidance
+
+### Learning
+When extracting multiple token types from unstructured text (bio fields), simple regex `finditer()` loops can match overlapping spans. For example, a URL and an email inside the same URL would both match. Use explicit span tracking to skip already-matched ranges and prevent duplicate/overlapping extractions.
+
+### Rule
+In any multi-pattern regex extractor, maintain a set of excluded spans (start, end tuples) and skip new matches that overlap with previously matched tokens. This prevents emails/URLs within longer URLs and ensures each character belongs to at most one token.
+
+### Example
+```python
+# BEFORE (overlapping matches — email inside URL is extracted twice)
+def parse(self, text: str) -> list[BioToken]:
+    tokens = []
+    for pattern_name, regex in self.PATTERNS.items():
+        for match in regex.finditer(text):
+            tokens.append(BioToken(
+                token_type=pattern_name,
+                raw_value=match.group(),
+                ...
+            ))
+    return tokens
+
+# AFTER (span-aware — prevents overlaps)
+def parse(self, text: str) -> list[BioToken]:
+    tokens = []
+    excluded_spans = set()
+
+    for pattern_name, regex in self.PATTERNS.items():
+        for match in regex.finditer(text):
+            span = (match.start(), match.end())
+            # Skip if overlaps with existing token
+            if any(s <= match.start() < e or s < match.end() <= e
+                   for s, e in excluded_spans):
+                continue
+            excluded_spans.add(span)
+            tokens.append(BioToken(...))
+
+    return sorted(tokens, key=lambda t: t.raw_value.index(t.raw_value))
+```
+
+### Applies to
+T2.5 (BioParser), T3.x (enrichment APIs that parse text), and any future text parsing module that extracts multiple token types from the same field.
+
+---
+
+## L012 — Set SQLAlchemy UUID ids explicitly at construction time for test usability
+
+**Date:** 2026-03-21
+**Source:** Task T2.6 (positive — graph crawler implementation)
+**Category:** pattern
+**Tags:** sqlalchemy, orm, id-generation, uuid, unit-testing, mocking
+
+### Learning
+SQLAlchemy applies column-level defaults (like UUID generation) during `session.flush()` or `session.commit()`, not at Python object construction time. In unit tests where you construct objects without hitting a real database, the id attribute remains `None` until a flush occurs. For test assertions or use in foreign key references before persistence, you must explicitly set the UUID at construction: `node = GraphNode(..., id=uuid4())`.
+
+### Rule
+When creating SQLAlchemy ORM objects with UUID primary keys:
+1. If the id will be used in tests or before persistence: set it explicitly at construction with `id=uuid4()`
+2. Never rely on the default UUID generation to occur at object construction time — it only happens at flush
+3. Add the `id` parameter to the dataclass field definition so it's part of the public constructor
+
+### Example
+```python
+# BEFORE (id is None until session.flush() — breaks tests that reference node.id)
+from uuid import uuid4
+from sqlalchemy import Column, String, UUID
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
+
+class GraphNode(Base):
+    __tablename__ = "graph_nodes"
+    id = Column(UUID, primary_key=True, default=uuid4)
+    platform = Column(String(100))
+
+# In test:
+node = GraphNode(platform="github", identifier="alice")
+assert node.id is not None  # FAILS — id is None until flush()
+
+# AFTER (id set explicitly — works in tests and before persistence)
+from uuid import uuid4
+
+class GraphNode(Base):
+    __tablename__ = "graph_nodes"
+    id = Column(UUID, primary_key=True, default=uuid4)
+    platform = Column(String(100))
+
+    def __init__(self, platform: str, identifier: str, id: UUID | None = None, **kwargs):
+        self.id = id or uuid4()
+        self.platform = platform
+        self.identifier = identifier
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+# In test:
+node = GraphNode(platform="github", identifier="alice")
+assert node.id is not None  # PASSES — id is set immediately
+parent_node_id = node.id  # Works before any flush/commit
+
+# Or pass id explicitly:
+node = GraphNode(platform="github", identifier="alice", id=uuid4())
+```
+
+### Applies to
+T2.6 (GraphNode, GraphEdge persistence), T3.x (any new tables with UUID PKs), and all future ORM models that need ids accessible before database flush.
+
+---
+
 <!--
 TEMPLATE — copy this for each new learning:
 
@@ -348,6 +517,9 @@ TEMPLATE — copy this for each new learning:
 
 ### Design patterns
 - L009: Rate-limit sleep must be in `finally` block
+- L010: Extract result aggregation to keep execute() under 20 lines
+- L011: Use span tracking in regex extraction to avoid overlapping token matches
+- L012: Set SQLAlchemy UUID ids explicitly at construction for test usability
 
 ### Testing techniques
 - L004: Exclude `tests/` from high-entropy string CI scans
@@ -375,6 +547,8 @@ TEMPLATE — copy this for each new learning:
 | `async def get_X() -> AsyncGenerator[X, None]: yield; finally: close()` DI provider | T1.5 | 0 | — |
 | `except httpx.HTTPStatusError: raise ModuleAPIError(...) from None` | T1.5 | 0 | — |
 | `DATABASE_URL` env var priority in conftest with SQLite type overrides | T1.5 | 0 | — |
+| `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 0 | — |
+| BFS via `asyncio.Queue` with visited set, `asyncio.wait_for()` for timeout, explicit id=uuid4() | T2.6 | 0 | — |
 
 ---
 
