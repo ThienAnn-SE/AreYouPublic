@@ -86,6 +86,8 @@ class CacheLayer:
         Returns:
             True if the value was stored, False on error.
         """
+        # TODO(security): Encrypt PII at rest per SECURITY_WORKFLOW.md §3.4 / threat T8.
+        # Breach data cached here may contain sensitive details linked to users.
         full_key = f"{self._prefix}:{namespace}:{key}"
         try:
             serialized = json.dumps(value)

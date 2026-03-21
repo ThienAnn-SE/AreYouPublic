@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from dataclasses import dataclass, field
 
 import httpx
@@ -239,7 +240,13 @@ class HIBPClient:
             logger.info("No breaches found for email hash %s", email_hash)
             return []
 
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # Re-raise without the raw URL (which contains the email address)
+            raise ModuleAPIError(
+                "hibp", exc.response.status_code, "Breach lookup failed"
+            ) from None
         raw_breaches: list[dict[str, object]] = response.json()
 
         breaches = [self._parse_breach(raw) for raw in raw_breaches]
@@ -333,9 +340,9 @@ class HIBPClient:
                     raise ModuleTimeoutError(
                         "hibp", f"Request timed out (attempt {attempt}/{MAX_RETRIES})"
                     ) from exc
-
-                # Enforce rate limit delay after every request
-                await asyncio.sleep(REQUEST_INTERVAL_SECONDS)
+                finally:
+                    # Enforce rate limit delay after every request, even on failure
+                    await asyncio.sleep(REQUEST_INTERVAL_SECONDS)
 
             if response.status_code != 429:
                 return response
@@ -373,7 +380,7 @@ class HIBPClient:
             breach_date=str(raw.get("BreachDate", "")),
             added_date=str(raw.get("AddedDate", "")),
             pwn_count=int(raw.get("PwnCount", 0)),  # type: ignore[arg-type]
-            description=str(raw.get("Description", "")),
+            description=re.sub(r"<[^>]+>", "", str(raw.get("Description", ""))),
             data_classes=data_classes,
             is_verified=bool(raw.get("IsVerified", False)),
             is_sensitive=bool(raw.get("IsSensitive", False)),
