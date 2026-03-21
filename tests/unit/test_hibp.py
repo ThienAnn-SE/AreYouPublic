@@ -16,7 +16,7 @@ import httpx
 import pytest
 import respx
 
-from piea.modules.base import ModuleResult, Severity, ScanInputs
+from piea.modules.base import ModuleAPIError, ModuleResult, Severity, ScanInputs
 from piea.modules.hibp import (
     HIBP_API_BASE,
     HIBP_PASSWORDS_BASE,
@@ -198,7 +198,7 @@ class TestHIBPClientBreaches:
         respx.get(f"{HIBP_API_BASE}/breachedaccount/{TEST_EMAIL}").respond(500)
 
         client = HIBPClient(api_key="test-key")
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(ModuleAPIError, match="Breach lookup failed"):
             await client.fetch_breaches_for_email(TEST_EMAIL)
         await client.close()
 
