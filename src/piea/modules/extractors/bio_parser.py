@@ -66,7 +66,7 @@ class BioParser:
     All methods are stateless — the class holds no mutable state.
     Usage::
 
-        tokens = BioParser().parse("Find me at https://github.com/alice or @alice@fosstodon.org")
+        tokens = BioParser().parse("Find me at https://github.com/alice or @alice@mastodon.example.com")
     """
 
     def parse(self, text: str) -> list[BioToken]:

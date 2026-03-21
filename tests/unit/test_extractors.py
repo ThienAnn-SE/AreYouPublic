@@ -56,19 +56,19 @@ class TestBioParser:
 
     def test_mastodon_handle_classified_not_as_email(self) -> None:
         """@user@instance.tld must produce mastodon_handle, not email (overlap test)."""
-        tokens = self.parser.parse("Find me at @alice@fosstodon.org")
+        tokens = self.parser.parse("Find me at @alice@mastodon.example.com")
         types = {t.token_type for t in tokens}
         assert "mastodon_handle" in types
         assert "email" not in types
 
     def test_mastodon_handle_not_duplicated(self) -> None:
         """Only one token per Mastodon handle — no overlap double-count."""
-        tokens = self.parser.parse("@alice@fosstodon.org")
+        tokens = self.parser.parse("@alice@mastodon.example.com")
         mastodon = [t for t in tokens if t.token_type == "mastodon_handle"]
         assert len(mastodon) == 1
 
     def test_mastodon_platform_set_correctly(self) -> None:
-        tokens = self.parser.parse("Toot at @bob@hachyderm.io")
+        tokens = self.parser.parse("Toot at @bob@mastodon.example.org")
         m = next(t for t in tokens if t.token_type == "mastodon_handle")
         assert m.platform == "mastodon"
 
@@ -95,7 +95,7 @@ class TestBioParser:
 
     def test_confidence_within_range(self) -> None:
         tokens = self.parser.parse(
-            "https://github.com/alice @alice@mastodon.social user@example.com"
+            "https://github.com/alice @alice@mastodon.example.com user@example.com"
         )
         for t in tokens:
             assert 0.0 <= t.confidence <= 1.0
