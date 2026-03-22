@@ -27,6 +27,7 @@ from piea.modules.search import (
     SearchClient,
     SearchHit,
     SearchModule,
+    SearchModuleConfig,
     SearchQueryResult,
 )
 
@@ -34,7 +35,7 @@ from piea.modules.search import (
 # Fixtures
 # ---------------------------------------------------------------------------
 
-BROKERS_CONFIG_PATH = Path("config/data_brokers.json")
+BROKERS_CONFIG_PATH = Path(__file__).parents[2] / "config" / "data_brokers.json"
 CSE_BASE = "https://www.googleapis.com/customsearch/v1"
 
 SAMPLE_CSE_RESPONSE = {
@@ -70,9 +71,11 @@ def scan_inputs_name_only() -> ScanInputs:
 @pytest.fixture
 def search_module() -> SearchModule:
     return SearchModule(
-        api_key="test-key",
-        engine_id="test-engine",
-        brokers_config_path=BROKERS_CONFIG_PATH,
+        SearchModuleConfig(
+            api_key="test-key",
+            engine_id="test-engine",
+            brokers_config_path=BROKERS_CONFIG_PATH,
+        )
     )
 
 
@@ -331,7 +334,7 @@ async def test_non_broker_result_severity_tiers(search_module: SearchModule) -> 
         respx.get(CSE_BASE).mock(
             return_value=httpx.Response(200, json=make_items(count))
         )
-        module = SearchModule(api_key="k", engine_id="e")
+        module = SearchModule(SearchModuleConfig(api_key="k", engine_id="e"))
         result = await module.execute(ScanInputs(full_name="Jane Doe"))
         await module.close()
         exposure = next(
@@ -402,7 +405,9 @@ def test_missing_broker_config_raises(tmp_path: Path) -> None:
     """SearchModule.__init__ raises FileNotFoundError for missing config."""
     with pytest.raises(FileNotFoundError):
         SearchModule(
-            api_key="k",
-            engine_id="e",
-            brokers_config_path=tmp_path / "nonexistent.json",
+            SearchModuleConfig(
+                api_key="k",
+                engine_id="e",
+                brokers_config_path=tmp_path / "nonexistent.json",
+            )
         )

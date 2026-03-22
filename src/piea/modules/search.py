@@ -131,6 +131,28 @@ class SearchClient:
 
 
 # ---------------------------------------------------------------------------
+# SearchModuleConfig
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class SearchModuleConfig:
+    """Configuration for SearchModule.
+
+    Attributes:
+        api_key: Google Custom Search API key.
+        engine_id: Google Custom Search Engine ID.
+        brokers_config_path: Path to data broker registry JSON.
+        timeout: HTTP request timeout in seconds.
+    """
+
+    api_key: str
+    engine_id: str
+    brokers_config_path: Path = DEFAULT_BROKERS_CONFIG_PATH
+    timeout: float = 10.0
+
+
+# ---------------------------------------------------------------------------
 # SearchModule
 # ---------------------------------------------------------------------------
 
@@ -138,17 +160,11 @@ class SearchClient:
 class SearchModule(BaseModule):
     """OSINT module: enumerates public search footprint via Google CSE."""
 
-    def __init__(
-        self,
-        api_key: str,
-        engine_id: str,
-        brokers_config_path: Path = DEFAULT_BROKERS_CONFIG_PATH,
-        timeout: float = 10.0,
-    ) -> None:
+    def __init__(self, config: SearchModuleConfig) -> None:
         self._client = SearchClient(
-            api_key=api_key, engine_id=engine_id, timeout=timeout
+            api_key=config.api_key, engine_id=config.engine_id, timeout=config.timeout
         )
-        broker_data = json.loads(brokers_config_path.read_text(encoding="utf-8"))
+        broker_data = json.loads(config.brokers_config_path.read_text(encoding="utf-8"))
         brokers = broker_data["brokers"]
         self._broker_domains: frozenset[str] = frozenset(
             entry["domain"] for entry in brokers
