@@ -424,9 +424,13 @@ class SearchResult:
     snippet: str
     url: str
     display_link: str
-    category: str
-    is_data_broker: bool
-    opt_out_url: str | None
+    category: str = "uncategorized"
+    is_data_broker: bool = False
+    opt_out_url: str | None = None
+
+
+# Backward-compatible alias used by piea.modules.categorizer (master branch)
+SearchHit = SearchResult
 
 
 @dataclass(frozen=True, slots=True)
