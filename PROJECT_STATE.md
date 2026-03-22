@@ -2,9 +2,9 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-22 — Phase 3 Task T3.7 Paste Site Monitor (COMPLETE)
+**Last updated:** 2026-03-22 — Phase 3 Task T3.8 Integration tests (COMPLETE)
 **Updated by:** Claude Code
-**Current phase:** Phase 3 — Search & domain intelligence (T3.1 ✓, T3.2 ✓, T3.3 ✓, T3.6 ✓, T3.7 ✓ → T3.8 next)
+**Current phase:** Phase 3 COMPLETE (T3.1 ✓, T3.2 ✓, T3.3 ✓, T3.6 ✓, T3.7 ✓, T3.8 ✓ → Phase 4 next)
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
@@ -159,11 +159,12 @@ piea/
 │   │   ├── test_hunter.py             [Status: created — T3.6]
 │   │   └── test_paste_monitor.py      [Status: created — T3.7]
 │   └── integration/
-│       └── __init__.py                 [Status: created — T0.6]
+│       ├── __init__.py                 [Status: created — T0.6]
+│       └── test_phase3_modules.py      [Status: created — T3.8]
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 74 created / ~65 planned (hunter.py, test_hunter.py, paste_monitor.py, test_paste_monitor.py added; pyproject.toml updated)
+**File count:** 75 created / ~65 planned (hunter.py, test_hunter.py, paste_monitor.py, test_paste_monitor.py, test_phase3_modules.py added; pyproject.toml updated)
 **Last hierarchy update:** 2026-03-22
 
 ---
@@ -177,7 +178,7 @@ piea/
 | 0 | Project setup & ethics | COMPLETE | 7 | 7 | No — pending `docker compose up` verification |
 | 1 | Breach exposure module | COMPLETE | 6 | 6 | No — pending integration test with real HIBP API key |
 | 2 | Username enum & graph crawler | COMPLETE | 6 | 14 | No — all Phase 2 tasks complete, awaiting Phase 3 |
-| 3 | Search & domain intelligence | IN PROGRESS | 5 | 8 | No — T3.1, T3.2, T3.3, T3.6, T3.7 complete, proceeding with T3.8 |
+| 3 | Search & domain intelligence | COMPLETE | 8 | 8 | No — All Phase 3 tasks complete, ready for Phase 4 |
 | 4 | Risk scoring engine | NOT STARTED | 0 | 7 | No |
 | 5 | Scan orchestration & API | NOT STARTED | 0 | 7 | No |
 | 6 | Frontend & report UI | NOT STARTED | 0 | 12 | No |
@@ -197,7 +198,8 @@ COMPLETE:   T3.2 — Domain intelligence module (WhoisClient + DNSAnalyzer, ~750
 COMPLETE:   T3.3 — EntityResolver (name collision handling via secondary signals, 5 test classes, 95% coverage for search.py)
 COMPLETE:   T3.6 — Hunter.io email pattern lookup (HunterClient, 3 findings types, 97% coverage, L007 + L009 compliant)
 COMPLETE:   T3.7 — Paste site monitor (PasteMonitor, HIBP paste-account API, 100% coverage, 1 HIGH-severity finding per paste, L007 + L009 compliant)
-NEXT UP:    T3.8 — Integration tests for Phase 3 modules
+COMPLETE:   T3.8 — Integration tests for Phase 3 modules (test_phase3_modules.py, 6 test classes, 30+ integration tests, 91.69% coverage, all 456 tests passing)
+NEXT UP:    T4.1 — Risk scoring engine foundation (score computation, weighting, severity classification)
 ```
 
 ### 3.3 Completed tasks log
@@ -230,6 +232,7 @@ NEXT UP:    T3.8 — Integration tests for Phase 3 modules
 | T3.3 | Implement EntityResolver for name collision handling via secondary signals (DisambiguationResult, common names heuristic, COMMON_NAME_RESULT_THRESHOLD constant, 5 test classes, 95% coverage) | 2026-03-22 | src/piea/modules/search.py (enhanced), tests/unit/test_search.py (enhanced), src/piea/modules/__init__.py (updated) |
 | T3.6 | Implement HunterClient for Hunter.io email pattern lookup (domain-search + email-finder, partial success logic, 3 finding types, 97% coverage, rate-limit + API error handling per L007/L009) | 2026-03-22 | src/piea/modules/hunter.py, tests/unit/test_hunter.py, src/piea/modules/__init__.py (updated), pyproject.toml (hunter package + mypy override) |
 | T3.7 | Implement PasteMonitor for HIBP paste-account exposure (PasteClient + PasteMonitor, 1 HIGH finding per paste, 100% coverage, rate-limit + PII protection per L007/L009) | 2026-03-22 | src/piea/modules/paste_monitor.py, tests/unit/test_paste_monitor.py, src/piea/modules/__init__.py (updated) |
+| T3.8 | Integration tests for Phase 3 modules (contract compliance, concurrent execution, error isolation, input routing, metadata validation, resource cleanup) | 2026-03-22 | tests/integration/test_phase3_modules.py (473 lines, 6 test classes, 30+ tests, 91.69% project coverage) |
 
 ---
 
