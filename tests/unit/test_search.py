@@ -12,12 +12,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import httpx
 import pytest
+import respx
 
 from piea.modules.base import (
+    ModuleAPIError,
+    RateLimitExceededError,
     ScanInputs,
 )
 from piea.modules.search import (
+    SearchClient,
     SearchHit,
     SearchModule,
     SearchQueryResult,
@@ -127,3 +132,56 @@ def test_query_construction_deduplication(search_module: SearchModule) -> None:
     inputs = ScanInputs(full_name="janedoe", username="janedoe")
     queries = search_module._build_queries(inputs)
     assert queries.count('"janedoe"') == 1
+
+
+# ---------------------------------------------------------------------------
+# Task 4: SearchClient HTTP layer
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_returns_hits() -> None:
+    """SearchClient parses CSE JSON response into SearchHit tuples."""
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(200, json=SAMPLE_CSE_RESPONSE))
+    client = SearchClient(api_key="key", engine_id="cx")
+    hits = await client.search("Jane Doe")
+    await client.close()
+    assert len(hits) == 2
+    assert hits[0].title == "Jane Doe - LinkedIn"
+    assert hits[0].url == "https://www.linkedin.com/in/janedoe"
+    assert hits[0].display_link == "www.linkedin.com"
+    assert isinstance(hits, tuple)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_empty_results_returns_empty_tuple() -> None:
+    """CSE returns {} (no 'items' key) when no results — must return empty tuple."""
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(200, json={}))
+    client = SearchClient(api_key="key", engine_id="cx")
+    hits = await client.search("very-obscure-query-xyz")
+    await client.close()
+    assert hits == ()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_quota_exhausted_raises_rate_limit_error() -> None:
+    """HTTP 429 from CSE → RateLimitExceededError."""
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(429))
+    client = SearchClient(api_key="key", engine_id="cx")
+    with pytest.raises(RateLimitExceededError):
+        await client.search("Jane Doe")
+    await client.close()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_api_error_raises_module_api_error() -> None:
+    """HTTP 500 from CSE → ModuleAPIError."""
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(500))
+    client = SearchClient(api_key="key", engine_id="cx")
+    with pytest.raises(ModuleAPIError):
+        await client.search("Jane Doe")
+    await client.close()

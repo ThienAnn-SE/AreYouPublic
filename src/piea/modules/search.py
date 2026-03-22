@@ -14,10 +14,16 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+import httpx
 
 from piea.modules.base import (
     BaseModule,
+    ModuleAPIError,
     ModuleResult,
+    ModuleTimeoutError,
+    RateLimitExceededError,
     ScanInputs,
 )
 
@@ -69,24 +75,57 @@ class SearchQueryResult:
 
 
 # ---------------------------------------------------------------------------
-# SearchClient (stub — replaced in Task 4)
+# SearchClient
 # ---------------------------------------------------------------------------
 
 
 class SearchClient:
-    """Thin async HTTP wrapper around the Google Custom Search JSON API."""
+    """Thin async HTTP wrapper around the Google Custom Search JSON API.
+
+    External docs: https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list
+    """
 
     def __init__(self, api_key: str, engine_id: str, timeout: float = 10.0) -> None:
         self._api_key = api_key
         self._engine_id = engine_id
-        self._timeout = timeout
+        self._http = httpx.AsyncClient(timeout=timeout)
 
     async def search(self, query: str) -> tuple[SearchHit, ...]:
-        """Execute one search query. Stub — replaced in Task 4."""
-        raise NotImplementedError
+        """Execute one search query and return matching hits.
+
+        Raises:
+            RateLimitExceededError: HTTP 429 — daily quota exhausted.
+            ModuleAPIError: Any other 4xx/5xx response.
+            ModuleTimeoutError: Request exceeded the configured timeout.
+        """
+        try:
+            response = await self._http.get(
+                CSE_API_BASE,
+                params={"key": self._api_key, "cx": self._engine_id, "q": query},
+            )
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise ModuleTimeoutError("search", str(exc)) from exc
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429:
+                raise RateLimitExceededError("search") from exc
+            raise ModuleAPIError("search", exc.response.status_code) from exc
+
+        payload: dict[str, Any] = response.json()
+        return tuple(self._parse_hit(item) for item in payload.get("items", []))
+
+    def _parse_hit(self, item: dict[str, Any]) -> SearchHit:
+        """Parse one CSE result item into a SearchHit."""
+        return SearchHit(
+            title=item.get("title", ""),
+            snippet=item.get("snippet", ""),
+            url=item["link"],
+            display_link=item.get("displayLink", ""),
+        )
 
     async def close(self) -> None:
-        pass
+        """Close the underlying HTTP client and release connections."""
+        await self._http.aclose()
 
 
 # ---------------------------------------------------------------------------
