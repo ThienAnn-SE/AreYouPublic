@@ -21,10 +21,12 @@ import httpx
 from piea.modules.base import (
     BaseModule,
     ModuleAPIError,
+    ModuleFinding,
     ModuleResult,
     ModuleTimeoutError,
     RateLimitExceededError,
     ScanInputs,
+    Severity,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,8 +198,121 @@ class SearchModule(BaseModule):
         )
 
     async def execute(self, inputs: ScanInputs) -> ModuleResult:
-        """Stub — implemented in Task 6."""
-        raise NotImplementedError
+        """Enumerate public search footprint and detect data broker exposure."""
+        queries = self._build_queries(inputs)
+        if not queries:
+            return ModuleResult(module_name=self.name, success=True)
+
+        deduplicated: dict[str, SearchHit] = {}
+        errors: list[str] = []
+        quota_exhausted = False
+
+        for query in queries:
+            try:
+                hits = await self._client.search(query)
+            except RateLimitExceededError:
+                errors.append("Google CSE daily quota exhausted — partial results only")
+                quota_exhausted = True
+                break
+            except (ModuleAPIError, ModuleTimeoutError) as exc:
+                errors.append(str(exc))
+                continue
+
+            for hit in hits:
+                if hit.url not in deduplicated:
+                    deduplicated[hit.url] = hit
+
+        findings = self._build_findings(
+            hits=list(deduplicated.values()),
+            inputs=inputs,
+            queries_used=queries,
+        )
+        return ModuleResult(
+            module_name=self.name,
+            success=not quota_exhausted,
+            findings=findings,
+            errors=errors,
+        )
+
+    def _build_findings(
+        self,
+        hits: list[SearchHit],
+        inputs: ScanInputs,
+        queries_used: list[str],
+    ) -> list[ModuleFinding]:
+        """Generate all ModuleFindings from deduplicated search hits."""
+        findings: list[ModuleFinding] = []
+        if hits:
+            findings.append(self._build_exposure_finding(hits, queries_used, inputs))
+        for hit in hits:
+            if self._is_broker(hit):
+                findings.append(self._build_broker_finding(hit))
+        return findings
+
+    def _build_exposure_finding(
+        self,
+        hits: list[SearchHit],
+        queries_used: list[str],
+        inputs: ScanInputs,
+    ) -> ModuleFinding:
+        """Build the search_exposure finding summarising all results."""
+        result_count = len(hits)
+        if result_count <= 3:
+            severity = Severity.LOW
+        elif result_count <= 10:
+            severity = Severity.MEDIUM
+        else:
+            severity = Severity.HIGH
+
+        identifier = inputs.full_name or inputs.username or inputs.email or "target"
+        evidence: dict[str, object] = {
+            "query_count": len(queries_used),
+            "result_count": result_count,
+            "urls": [h.url for h in hits[:10]],
+            "queries_used": queries_used,
+        }
+        return ModuleFinding(
+            finding_type="search_exposure",
+            severity=severity,
+            category="search",
+            title=f"Public search results found for {identifier}",
+            description=(
+                f"Found {result_count} public web result(s) for the target identity. "
+                "Results indicate public exposure on the web."
+            ),
+            platform=None,
+            evidence=evidence,
+            remediation_action="Review results and remove or restrict public profiles where possible.",
+            remediation_effort="moderate",
+        )
+
+    def _build_broker_finding(self, hit: SearchHit) -> ModuleFinding:
+        """Build a data_broker_exposure finding for one matched broker hit."""
+        domain = hit.display_link.lower().removeprefix("www.")
+        parts = domain.split(".")
+        registered = ".".join(parts[-2:])
+        optout_url = self._get_optout_url(registered)
+        evidence: dict[str, object] = {
+            "url": hit.url,
+            "title": hit.title,
+            "snippet": hit.snippet,
+            "broker_domain": registered,
+        }
+        return ModuleFinding(
+            finding_type="data_broker_exposure",
+            severity=Severity.HIGH,
+            category="search",
+            title=f"Profile found on data broker: {hit.display_link}",
+            description=(
+                f"A profile for the target was found on the data broker site {registered}. "
+                "Data brokers aggregate personal information and sell it publicly."
+            ),
+            platform=registered,
+            evidence=evidence,
+            remediation_action=f"Request removal at {optout_url}",
+            remediation_effort="easy",
+            remediation_url=optout_url,
+        )
 
     async def close(self) -> None:
         await self._client.close()

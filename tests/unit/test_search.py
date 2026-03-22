@@ -11,6 +11,7 @@ Tests cover:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -20,6 +21,7 @@ from piea.modules.base import (
     ModuleAPIError,
     RateLimitExceededError,
     ScanInputs,
+    Severity,
 )
 from piea.modules.search import (
     SearchClient,
@@ -230,3 +232,177 @@ def test_broker_detection_non_broker(search_module: SearchModule) -> None:
         display_link="linkedin.com",
     )
     assert search_module._is_broker(hit) is False
+
+
+# ---------------------------------------------------------------------------
+# Task 6: SearchModule.execute() integration
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_quota_exhausted_returns_graceful_fail(
+    search_module: SearchModule, scan_inputs_name_only: ScanInputs
+) -> None:
+    """HTTP 429 on first query → success=False, no exception raised."""
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(429))
+    result = await search_module.execute(scan_inputs_name_only)
+    await search_module.close()
+    assert result.success is False
+    assert any("quota" in e.lower() for e in result.errors)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_quota_exhausted_preserves_prior_findings(
+    search_module: SearchModule,
+) -> None:
+    """Query 1 succeeds, query 2 hits 429 → findings from query 1 are kept."""
+    inputs = ScanInputs(full_name="Jane Doe", email="jane@example.com")
+    first_response = {
+        "items": [
+            {
+                "title": "Jane Blog",
+                "snippet": "...",
+                "link": "https://janedoe.com",
+                "displayLink": "janedoe.com",
+            }
+        ]
+    }
+    respx.get(CSE_BASE).mock(
+        side_effect=[httpx.Response(200, json=first_response), httpx.Response(429)]
+    )
+    result = await search_module.execute(inputs)
+    await search_module.close()
+    assert result.success is False
+    assert any(f.finding_type == "search_exposure" for f in result.findings)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_broker_hit_produces_high_severity_finding(
+    search_module: SearchModule, scan_inputs_name_only: ScanInputs
+) -> None:
+    """A broker URL in results → data_broker_exposure finding with HIGH severity."""
+    broker_response = {
+        "items": [
+            {
+                "title": "Jane Doe | Spokeo",
+                "snippet": "Find Jane Doe...",
+                "link": "https://www.spokeo.com/Jane-Doe",
+                "displayLink": "www.spokeo.com",
+            }
+        ]
+    }
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(200, json=broker_response))
+    result = await search_module.execute(scan_inputs_name_only)
+    await search_module.close()
+    broker_findings = [
+        f for f in result.findings if f.finding_type == "data_broker_exposure"
+    ]
+    assert len(broker_findings) == 1
+    assert broker_findings[0].severity == Severity.HIGH
+    assert "spokeo.com" in broker_findings[0].remediation_action
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_non_broker_result_severity_tiers(search_module: SearchModule) -> None:
+    """1 result → LOW, 5 results → MEDIUM, 11 results → HIGH (search_exposure)."""
+
+    def make_items(count: int) -> dict[str, Any]:
+        return {
+            "items": [
+                {
+                    "title": f"R{i}",
+                    "snippet": "...",
+                    "link": f"https://site{i}.com/jane",
+                    "displayLink": f"site{i}.com",
+                }
+                for i in range(count)
+            ]
+        }
+
+    for count, expected_severity in [
+        (1, Severity.LOW),
+        (5, Severity.MEDIUM),
+        (11, Severity.HIGH),
+    ]:
+        respx.get(CSE_BASE).mock(
+            return_value=httpx.Response(200, json=make_items(count))
+        )
+        module = SearchModule(api_key="k", engine_id="e")
+        result = await module.execute(ScanInputs(full_name="Jane Doe"))
+        await module.close()
+        exposure = next(
+            f for f in result.findings if f.finding_type == "search_exposure"
+        )
+        assert exposure.severity == expected_severity, f"count={count}"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_deduplication_across_queries(search_module: SearchModule) -> None:
+    """Same URL appearing in two query responses → counted once in findings."""
+    same_item = {
+        "items": [
+            {
+                "title": "Jane",
+                "snippet": "...",
+                "link": "https://same.com/jane",
+                "displayLink": "same.com",
+            }
+        ]
+    }
+    respx.get(CSE_BASE).mock(return_value=httpx.Response(200, json=same_item))
+    inputs = ScanInputs(full_name="Jane Doe", email="jane@example.com")
+    result = await search_module.execute(inputs)
+    await search_module.close()
+    exposure = next(f for f in result.findings if f.finding_type == "search_exposure")
+    urls: list[str] = exposure.evidence["urls"]  # type: ignore[assignment]
+    assert urls.count("https://same.com/jane") == 1
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_api_error_continues_next_query(search_module: SearchModule) -> None:
+    """HTTP 500 on query 1 → error logged, query 2 still runs and produces findings."""
+    inputs = ScanInputs(full_name="Jane Doe", email="jane@example.com")
+    success_response = {
+        "items": [
+            {
+                "title": "Jane",
+                "snippet": "...",
+                "link": "https://janedoe.blog",
+                "displayLink": "janedoe.blog",
+            }
+        ]
+    }
+    respx.get(CSE_BASE).mock(
+        side_effect=[httpx.Response(500), httpx.Response(200, json=success_response)]
+    )
+    result = await search_module.execute(inputs)
+    await search_module.close()
+    assert any("500" in e for e in result.errors)
+    assert any(f.finding_type == "search_exposure" for f in result.findings)
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_no_inputs_returns_empty_result(search_module: SearchModule) -> None:
+    """All ScanInputs None → no queries issued, empty findings, success=True."""
+    result = await search_module.execute(ScanInputs())
+    await search_module.close()
+    assert result.success is True
+    assert result.findings == []
+    assert result.errors == []
+
+
+def test_missing_broker_config_raises(tmp_path: Path) -> None:
+    """SearchModule.__init__ raises FileNotFoundError for missing config."""
+    with pytest.raises(FileNotFoundError):
+        SearchModule(
+            api_key="k",
+            engine_id="e",
+            brokers_config_path=tmp_path / "nonexistent.json",
+        )
