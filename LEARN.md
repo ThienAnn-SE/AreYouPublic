@@ -22,11 +22,10 @@
 | L010 | 2026-03-21 | Task T2.4 (positive) | pattern | module-design, execute-pattern, result-aggregation | Extract result aggregation logic to dedicated method to keep execute() under 20 lines |
 | L011 | 2026-03-21 | Task T2.5 (positive) | pattern | profile-extraction, bio-parsing, regex | Use span tracking in regex extraction to avoid overlapping token matches in bio text |
 | L012 | 2026-03-21 | Task T2.6 (positive) | pattern | sqlalchemy, orm, id-generation, unit-testing | Set SQLAlchemy UUID ids explicitly at object construction time for test usability |
-| L013 | 2026-03-22 | Task T3.1 (positive) | pattern | module-design, dataclass, constructor-params | Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule |
-| L014 | 2026-03-22 | Task T3.1 (positive) | pattern | domain-extraction, string-manipulation | Use removeprefix for domain extraction, not lstrip — lstrip removes chars, removeprefix removes prefix only |
-| L015 | 2026-03-22 | Task T3.1 (positive) | testing | test-path-anchoring, pathlib, config-loading | Anchor test paths using Path(__file__).parents[N] instead of hardcoded relative paths |
-| L016 | 2026-03-22 | Task T3.2 (positive) | pattern | domain-matching, subdomain, categorization | Check both full domain and registered domain when matching — subdomains like news.ycombinator.com are semantically distinct |
-| L017 | 2026-03-22 | Task T3.2 (positive) | pattern | config-driven, json, extensibility | Put classification rules in JSON config (not hardcoded) to allow domain/keyword updates without code changes |
+| L013 | 2026-03-21 | Failure F007 at T3.1 | pattern | query-building, deduplication, search | Track primary input type when building multi-source queries to avoid duplicates |
+| L014 | 2026-03-22 | Task T3.3 (positive) | pattern | disambiguation, search-results, name-collision | Use name-list heuristic + secondary signal matching to disambiguate common names in search results |
+| L015 | 2026-03-22 | Task T3.2 (positive) | pattern | asyncio, blocking-library, whois, dns | Wrap blocking third-party libraries in asyncio.to_thread(), remap exceptions to domain errors, sanitize error messages |
+| L016 | 2026-03-22 | Task T3.6 (positive) | security | httpx, error-handling, pii, api-key | Re-raise httpx errors with `from None` when API key is in URL query param to drop the exception chain |
 
 ---
 
@@ -475,177 +474,222 @@ T2.6 (GraphNode, GraphEdge persistence), T3.x (any new tables with UUID PKs), an
 
 ---
 
-## L013 — Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule
+## L013 — Track primary input type when building multi-source queries
 
-**Date:** 2026-03-22
-**Source:** Task T3.1 (positive — SearchModule implementation)
+**Date:** 2026-03-21
+**Source:** Failure F007 at Task T3.1
 **Category:** pattern
-**Tags:** module-design, dataclass, constructor-params, dependency-injection
+**Tags:** query-building, deduplication, search, email, username
 
 ### Learning
-Modules that need multiple configuration parameters (API keys, engine IDs, max values, timeouts) violate the 3-parameter rule if each is passed separately. Grouping them into a frozen dataclass (`SearchModuleConfig`) allows a single `config` parameter while keeping the constructor clean.
+When constructing multiple search queries from heterogeneous inputs (email, username, full_name), a naive approach constructs each query type independently. This causes the same identifier to appear in multiple query lists if it is used as a fallback or in secondary combination logic. Tracking which input type was selected as primary allows explicit exclusion of that type from later query sources, preventing duplicates.
 
 ### Rule
-When a module init requires more than 3 parameters, create a frozen dataclass to group related config values. Pass the dataclass as a single `config` parameter. This keeps the constructor signature clean and makes configuration testable in isolation.
+When building N queries from M input sources:
+1. Identify the primary source (the one with highest priority/lowest missing rate)
+2. Build Q1 from the primary source
+3. For Q2, Q3, ... only include secondary/tertiary sources that were NOT used in earlier queries
+4. Deduplicate the final query list using a set before returning
 
 ### Example
 ```python
-# BEFORE (violates 3-param rule)
-class SearchModule(BaseModule):
-    def __init__(self, api_key: str, search_engine_id: str, max_queries: int, cache: CacheLayer, httpx_client: httpx.AsyncClient):
-        self.api_key = api_key
-        self.search_engine_id = search_engine_id
-        # ...
+# BEFORE (email appears in both Q1 and Q3, causing duplicates)
+def _build_queries(inputs: ScanInputs) -> list[str]:
+    queries = []
+    # Q1: primary (email or username)
+    if inputs.email:
+        queries.append(inputs.email)
+    elif inputs.username:
+        queries.append(inputs.username)
 
-# AFTER (clean — config grouped)
-from dataclasses import dataclass
+    # Q2, Q3: secondary combinations
+    if inputs.full_name:
+        queries.append(f"{inputs.full_name} {inputs.username or ''}")
+        queries.append(f"{inputs.full_name} {inputs.email or ''}")  # email again!
 
-@dataclass(frozen=True)
-class SearchModuleConfig:
-    api_key: str
-    search_engine_id: str
-    max_queries: int = 3
+    return queries
 
-class SearchModule(BaseModule):
-    def __init__(self, config: SearchModuleConfig, cache: CacheLayer):
-        self.config = config
-        self._cache = cache
+# AFTER (tracks primary type, excludes it from later queries)
+def _build_queries(inputs: ScanInputs) -> list[str]:
+    queries = set()
+
+    # Determine primary source and track it
+    primary_type = None
+    if inputs.email:
+        queries.add(inputs.email)
+        primary_type = "email"
+    elif inputs.username:
+        queries.add(inputs.username)
+        primary_type = "username"
+    else:
+        return list(queries)  # no queries possible
+
+    # Q2: full_name with secondary identifier (skip primary type)
+    if inputs.full_name:
+        if primary_type != "username" and inputs.username:
+            queries.add(f"{inputs.full_name} {inputs.username}")
+        elif primary_type != "email" and inputs.email:
+            queries.add(f"{inputs.full_name} {inputs.email}")
+
+    # Return deduplicated list
+    return list(queries)
 ```
 
 ### Applies to
-T3.1 (SearchModule), T3.2 (ResultCategorizer), T4.x (risk scoring modules), and any future module with more than 3 init parameters.
+T3.1 (SearchModule query builder), T3.2 (domain intelligence), and any future module that constructs multiple queries/requests from overlapping input sources.
 
 ---
 
-## L014 — Use removeprefix for domain extraction, not lstrip
+## L014 — Use name-list heuristic + secondary signal matching for search result disambiguation
 
 **Date:** 2026-03-22
-**Source:** Task T3.1 (positive — broker domain matching)
+**Source:** Task T3.3 (positive — EntityResolver implementation)
 **Category:** pattern
-**Tags:** domain-extraction, string-manipulation, text-normalization
+**Tags:** disambiguation, search-results, name-collision, entity-resolution, secondary-signals
 
 ### Learning
-`str.lstrip("www.")` removes any chars from the set {'w', '.'} from the left, not the prefix "www." as a unit. On "www.google.com", it removes "www." correctly, but on "w.google.com" it also removes the leading "w", breaking the domain. Use `str.removeprefix()` (Python 3.9+) to safely remove a literal prefix.
+When a name-only scan (no email/username) is performed, multiple people may match the query in search results. A static list of common names (e.g., US Census top-frequency first names) combined with secondary signal matching (domain presence, employer keywords, location) can disambiguate results without requiring external entity linking APIs or ML models.
 
 ### Rule
-Never use `lstrip()` to remove prefixes from strings. Always use `removeprefix()` for safe, predictable prefix removal. If the target must be compatible with Python < 3.9, use slicing with a conditional check.
+When disambiguating search results for a name:
+1. Maintain a frozen set of common first names (~190 US Census names for English-language scans)
+2. Extract secondary signals from each result: domain, TLD, title/snippet keywords, caller-supplied signals (employer, location)
+3. Match signals using substring matching against result title/snippet/URL
+4. Common names + zero matching signals → INFO severity (low confidence)
+5. Uncommon names or any signal match → preserve original severity (medium or higher)
+6. Always generate data broker findings from the unfiltered result list (prevent false negatives on high-confidence findings)
 
 ### Example
 ```python
-# BEFORE (lstrip removes chars, not prefix — breaks on edge cases)
-domain = "w.google.com"
-normalized = domain.lstrip("www.")  # Returns ".google.com" (WRONG!)
+# BEFORE (name-only scans always MEDIUM severity, even if 500+ people match)
+async def _aggregate_results(self, results: list[SearchResult]) -> list[ModuleFinding]:
+    findings = []
+    for result in results:
+        findings.append(ModuleFinding(
+            title=result.title,
+            severity=Severity.MEDIUM,  # Always MEDIUM regardless of name frequency
+            ...
+        ))
+    return findings
 
-# AFTER (correct — removes prefix only)
-normalized = domain.removeprefix("www.")  # Returns "w.google.com" (correct)
+# AFTER (use EntityResolver to distinguish common vs uncommon names)
+async def _aggregate_results(self, results: list[SearchResult]) -> list[ModuleFinding]:
+    findings = []
 
-# For Python < 3.9:
-normalized = domain[4:] if domain.startswith("www.") else domain
+    # Disambiguate regular findings
+    if self._resolver:
+        disam = self._resolver.filter_results(results, self._subject_name)
+        for result in disam.matched_results:
+            severity = Severity.INFO if disam.is_common_name and not disam.has_secondary_signals else self._categorize(result).severity
+            findings.append(ModuleFinding(
+                title=result.title,
+                severity=severity,
+                ...
+            ))
+    else:
+        # No resolver; use unfiltered results
+        for result in results:
+            findings.append(...)
+
+    # Data brokers ALWAYS from full results (avoid false negatives)
+    for result in results:
+        is_broker, opt_out = self._detector.check(result.url)
+        if is_broker:
+            findings.append(ModuleFinding(
+                finding_type="data_broker_listing",
+                severity=Severity.HIGH,  # High confidence for data broker
+                ...
+            ))
+
+    return findings
 ```
 
 ### Applies to
-T3.1 (domain normalization in broker matching), T3.2+ (any URL/domain parsing module), and general string processing across the codebase.
+T3.1 (SearchModule via EntityResolver), T3.4+ (WhoisClient, other search/lookup modules), any future module that must disambiguate results when only a name is available.
 
 ---
 
-## L015 — Anchor test paths using Path(__file__).parents[N] instead of hardcoded relative paths
+## L015 — Wrap blocking third-party libraries with asyncio.to_thread() and sanitize error messages
 
 **Date:** 2026-03-22
-**Source:** Task T3.1 (positive — test config file loading)
-**Category:** testing
-**Tags:** test-path-anchoring, pathlib, config-loading, relative-paths
+**Source:** Task T3.2 (positive — domain intelligence module implementation)
+**Category:** pattern
+**Tags:** asyncio, blocking-library, whois, dns, exception-handling, pii
 
 ### Learning
-Tests that load config files using hardcoded relative paths like `Path("config/data_brokers.json")` fail when the test runner's working directory is not the project root. Using `Path(__file__).parents[N]` anchors paths to the test file's location, working regardless of cwd.
+Libraries like python-whois and dnspython are synchronous and blocking (socket-based I/O). When called in async code, they block the event loop, stalling all other tasks. The standard pattern is to wrap the entire blocking call in `asyncio.to_thread()`. Additionally, third-party library exceptions often include raw server response text that may contain PII or sensitive data — these must be caught and re-raised as domain-specific errors with sanitized messages.
 
 ### Rule
-In any test that loads external files (fixtures, config, data), construct the path using `Path(__file__).parents[N] / "relative/path/to/file"`. This makes tests independent of cwd.
+When integrating a blocking third-party library into async code:
+1. Wrap the entire operation in `asyncio.to_thread()`
+2. Catch all exceptions from the library in a try/except block
+3. Map library exceptions to domain-specific error classes (e.g., library.TimeoutError → DomainIntelTimeoutError)
+4. Remove raw response text from re-raised exception messages — only include domain-safe information
+5. Use `from exc` if the traceback is needed for debugging, `from None` for cleaner error chains
 
 ### Example
 ```python
-# BEFORE (fails if cwd != project root)
-import json
-from pathlib import Path
-def test_load_brokers():
-    brokers_path = Path("config/data_brokers.json")
-    brokers = json.loads(brokers_path.read_text())
-    # pytest from tests/ or src/ cwd breaks this
+# BEFORE (blocks event loop + leaks server response in error)
+def lookup_domain(domain: str) -> WhoisData:
+    return whois.whois(domain)  # blocks event loop
+    # On error: raw "socket timeout: 30s — Remote server responded with: Connection reset"
 
-# AFTER (correct — anchored to test file)
-def test_load_brokers():
-    brokers_path = Path(__file__).parents[2] / "config" / "data_brokers.json"
-    brokers = json.loads(brokers_path.read_text())
-    # Works from any cwd
+# AFTER (async-safe + sanitized errors)
+async def lookup_domain(domain: str) -> WhoisData:
+    try:
+        result = await asyncio.to_thread(whois.whois, domain)
+        return WhoisData(...)
+    except socket.timeout as exc:
+        raise DomainIntelTimeoutError(f"WHOIS lookup exceeded {TIMEOUT_SECONDS}s") from exc
+    except Exception as exc:
+        # Don't include exc.response text — it may contain server details
+        raise DomainIntelLookupError("WHOIS lookup failed") from None
 ```
 
 ### Applies to
-T3.1 (test_search.py config loading), T2.x (any test loading config/fixtures), and all future tests that depend on external data files.
+T3.2 (WhoisClient, DNSAnalyzer), T3.6 (Hunter.io API), T3.7 (paste site monitor), and any future module that calls blocking external APIs or libraries.
 
 ---
 
-## L016 — Check both full domain and registered domain when matching config entries
+## L016 — Re-raise httpx errors with `from None` when API key is in URL query param
 
 **Date:** 2026-03-22
-**Source:** Task T3.2 (positive — bug fix during implementation)
-**Category:** pattern
-**Tags:** domain-matching, subdomain, categorization, url-parsing
+**Source:** Task T3.6 (positive — HunterClient implementation)
+**Category:** security
+**Tags:** httpx, error-handling, pii, api-key, query-param
 
 ### Learning
-When matching a URL's domain against a config-driven domain list, extracting only the registered domain (last 2 labels) loses semantically significant subdomains. For example, `news.ycombinator.com` → `ycombinator.com` fails to match a config entry for `news.ycombinator.com`. The fix is a two-pass check: first try the full normalized domain (with `www.` stripped), then fall back to the registered domain.
+When an HTTP client library like httpx raises an exception, the exception chain includes the full request details. If the API key is embedded in the URL query string (as with Hunter.io's `?domain=example.com&api_key=SECRET`), re-raising the exception without dropping the chain will expose the secret in any error log or traceback. Using `from None` drops the chained exception and prevents this leakage.
 
 ### Rule
-When building domain-matching logic against config-driven lists, always check both the full normalized domain (e.g., `news.ycombinator.com`) and the registered domain (e.g., `ycombinator.com`). Config authors may list either form.
+When re-raising httpx exceptions for APIs that include secrets in the URL query string, always use `raise DomainError(...) from None` to drop the exception chain. Verify in tests that `exc_info.value.__cause__ is None`.
 
 ### Example
 ```python
-# BEFORE (loses subdomain — news.ycombinator.com → ycombinator.com, no match)
-domain = self._extract_registered_domain(url, display_link)
-for rule in rules:
-    if domain in rule.domains:
-        return match
+# BEFORE (leaks API key in exception chain)
+try:
+    response = await client.get("https://api.hunter.io/v2/domain-search?domain=example.com&api_key=SECRET")
+    response.raise_for_status()
+except httpx.HTTPStatusError as exc:
+    # Exception chain contains full URL with API key
+    raise HunterAPIError(f"Domain search failed") from exc  # WRONG — chain exposed
 
-# AFTER (checks both forms)
-full_domain = self._normalize_domain(display_link, url)  # news.ycombinator.com
-registered_domain = self._extract_registered_domain(url, display_link)  # ycombinator.com
-for rule in rules:
-    if full_domain in rule.domains or registered_domain in rule.domains:
-        return match
+# AFTER (clean exception chain — API key not leaked)
+try:
+    response = await client.get("https://api.hunter.io/v2/domain-search?domain=example.com&api_key=SECRET")
+    response.raise_for_status()
+except httpx.HTTPStatusError as exc:
+    # Exception chain dropped — no URL in traceback
+    raise HunterAPIError(f"Domain search failed for {domain}") from None  # CORRECT
+
+# In test:
+with pytest.raises(HunterAPIError) as exc_info:
+    await client.domain_search("example.com")
+assert exc_info.value.__cause__ is None  # Verify chain is dropped
 ```
 
 ### Applies to
-T3.2 (ResultCategorizer), T3.x (any future domain-based classification), and any module that matches URLs against curated domain lists.
-
----
-
-## L017 — Put classification rules in JSON config for extensibility without code changes
-
-**Date:** 2026-03-22
-**Source:** Task T3.2 (positive — design decision)
-**Category:** pattern
-**Tags:** config-driven, json, extensibility, categorization, domain-matching
-
-### Learning
-Hardcoding domain lists and keyword patterns in Python source makes adding new domains or categories require a code change, review, and deploy. Moving these rules to a JSON config file (like `config/search_categories.json`) lets operators update classification behavior without touching Python code, following the same pattern established by `config/platforms.json` (T2.1) and `config/data_brokers.json` (T3.1).
-
-### Rule
-When building rule-based classifiers or matchers, put all domain lists, keyword patterns, and category definitions in a JSON config file. Load and parse at initialization time. Log warnings for unknown/invalid entries rather than crashing.
-
-### Example
-```python
-# BEFORE (hardcoded — requires code change to add domain)
-SOCIAL_DOMAINS = {"twitter.com", "facebook.com", "reddit.com"}
-
-# AFTER (config-driven — add domains via JSON)
-raw = json.loads(config_path.read_text())
-for cat_name, cat_config in raw["categories"].items():
-    rules.append(_CategoryRule(
-        domains=frozenset(cat_config.get("domains", [])),
-        ...
-    ))
-```
-
-### Applies to
-T3.2 (search_categories.json), T3.x (future classifiers), T4.x (risk taxonomy), and any module that classifies data against curated rule sets.
+T3.6 (HunterClient), T3.7+ (PasteMonitor, other APIs with secrets in URL), and any future module that calls external APIs with secrets in query parameters or headers that may appear in logs.
 
 ---
 
@@ -699,16 +743,14 @@ TEMPLATE — copy this for each new learning:
 - L010: Extract result aggregation to keep execute() under 20 lines
 - L011: Use span tracking in regex extraction to avoid overlapping token matches
 - L012: Set SQLAlchemy UUID ids explicitly at construction for test usability
-- L013: Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule
-- L014: Use removeprefix for domain extraction, not lstrip
-- L016: Check both full domain and registered domain when matching config entries
-- L017: Put classification rules in JSON config for extensibility
+- L013: Track primary input type when building multi-source queries to avoid duplicates
+- L014: Name-list heuristic + secondary signal matching for search result disambiguation
+- L015: Wrap blocking third-party libraries with asyncio.to_thread() and sanitize error messages
 
 ### Testing techniques
 - L004: Exclude `tests/` from high-entropy string CI scans
 - L005: Set coverage threshold to current project state; raise incrementally
 - L002: SQLite needs explicit type overrides for PostgreSQL types
-- L015: Anchor test paths using Path(__file__).parents[N]
 
 ### Architecture decisions
 (None yet)
@@ -719,6 +761,7 @@ TEMPLATE — copy this for each new learning:
 ### Security considerations
 - L007: Re-raise httpx errors as domain errors to prevent PII leaking
 - L009: Rate-limit sleep in `finally` prevents 429 bypass
+- L016: Re-raise httpx errors with `from None` when API key is in URL query param
 
 ---
 
@@ -729,15 +772,14 @@ TEMPLATE — copy this for each new learning:
 | Pattern | First used at | Times reused | Skill file |
 |---------|-------------|-------------|-----------|
 | `async def get_X() -> AsyncGenerator[X, None]: yield; finally: close()` DI provider | T1.5 | 0 | — |
-| `except httpx.HTTPStatusError: raise ModuleAPIError(...) from None` | T1.5 | 1 | T3.1 search.py |
+| `except httpx.HTTPStatusError: raise ModuleAPIError(...) from None` | T1.5 | 0 | — |
 | `DATABASE_URL` env var priority in conftest with SQLite type overrides | T1.5 | 0 | — |
-| `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 1 | T3.1 search.py |
+| `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 0 | — |
 | BFS via `asyncio.Queue` with visited set, `asyncio.wait_for()` for timeout, explicit id=uuid4() | T2.6 | 0 | — |
-| `@dataclass(frozen=True) ConfigClass` as single module init param (L013 pattern) | T3.1 | 0 | — |
-| Domain normalization: `.lower().removeprefix("www.")` for case-insensitive matching (L014 pattern) | T3.1 | 1 | T3.2 categorizer.py |
-| Test path anchoring: `Path(__file__).parents[N] / "relative/path"` for config loading (L015 pattern) | T3.1 | 1 | T3.2 test_result_categorizer.py |
-| Two-pass domain check: full domain then registered domain for config matching (L016 pattern) | T3.2 | 0 | — |
-| Config-driven classifier: domain/keyword rules in JSON, parsed at init (L017 pattern) | T3.2 | 0 | — |
+| EntityResolver: frozen name set + signal extraction/matching for result disambiguation | T3.3 | 0 | — |
+| `await asyncio.to_thread(blocking_call, args)` with exception mapping to domain errors | T3.2 | 0 | — |
+| Rate-limit sleep in `finally` block inside `asyncio.Semaphore` context (L009 + L016 pattern) | T3.6 | 0 | — |
+| HunterClient: domain-search + email-finder with partial success, L007+L009 compliant | T3.6 | 0 | — |
 
 ---
 
