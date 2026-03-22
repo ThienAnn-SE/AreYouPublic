@@ -185,3 +185,48 @@ async def test_search_api_error_raises_module_api_error() -> None:
     with pytest.raises(ModuleAPIError):
         await client.search("Jane Doe")
     await client.close()
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Broker detection
+# ---------------------------------------------------------------------------
+
+
+def test_broker_detection_flags_known_domain(search_module: SearchModule) -> None:
+    hit = SearchHit(
+        title="Jane Doe",
+        snippet="...",
+        url="https://spokeo.com/Jane-Doe",
+        display_link="spokeo.com",
+    )
+    assert search_module._is_broker(hit) is True
+
+
+def test_broker_detection_www_prefix(search_module: SearchModule) -> None:
+    hit = SearchHit(
+        title="Jane Doe",
+        snippet="...",
+        url="https://www.spokeo.com/Jane-Doe",
+        display_link="www.spokeo.com",
+    )
+    assert search_module._is_broker(hit) is True
+
+
+def test_broker_detection_subdomain(search_module: SearchModule) -> None:
+    hit = SearchHit(
+        title="Jane Doe",
+        snippet="...",
+        url="https://results.spokeo.com/Jane-Doe",
+        display_link="results.spokeo.com",
+    )
+    assert search_module._is_broker(hit) is True
+
+
+def test_broker_detection_non_broker(search_module: SearchModule) -> None:
+    hit = SearchHit(
+        title="Jane Doe",
+        snippet="...",
+        url="https://linkedin.com/in/janedoe",
+        display_link="linkedin.com",
+    )
+    assert search_module._is_broker(hit) is False
