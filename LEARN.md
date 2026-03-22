@@ -25,6 +25,8 @@
 | L013 | 2026-03-22 | Task T3.1 (positive) | pattern | module-design, dataclass, constructor-params | Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule |
 | L014 | 2026-03-22 | Task T3.1 (positive) | pattern | domain-extraction, string-manipulation | Use removeprefix for domain extraction, not lstrip — lstrip removes chars, removeprefix removes prefix only |
 | L015 | 2026-03-22 | Task T3.1 (positive) | testing | test-path-anchoring, pathlib, config-loading | Anchor test paths using Path(__file__).parents[N] instead of hardcoded relative paths |
+| L016 | 2026-03-22 | Task T3.2 (positive) | pattern | domain-matching, subdomain, categorization | Check both full domain and registered domain when matching — subdomains like news.ycombinator.com are semantically distinct |
+| L017 | 2026-03-22 | Task T3.2 (positive) | pattern | config-driven, json, extensibility | Put classification rules in JSON config (not hardcoded) to allow domain/keyword updates without code changes |
 
 ---
 
@@ -581,6 +583,72 @@ T3.1 (test_search.py config loading), T2.x (any test loading config/fixtures), a
 
 ---
 
+## L016 — Check both full domain and registered domain when matching config entries
+
+**Date:** 2026-03-22
+**Source:** Task T3.2 (positive — bug fix during implementation)
+**Category:** pattern
+**Tags:** domain-matching, subdomain, categorization, url-parsing
+
+### Learning
+When matching a URL's domain against a config-driven domain list, extracting only the registered domain (last 2 labels) loses semantically significant subdomains. For example, `news.ycombinator.com` → `ycombinator.com` fails to match a config entry for `news.ycombinator.com`. The fix is a two-pass check: first try the full normalized domain (with `www.` stripped), then fall back to the registered domain.
+
+### Rule
+When building domain-matching logic against config-driven lists, always check both the full normalized domain (e.g., `news.ycombinator.com`) and the registered domain (e.g., `ycombinator.com`). Config authors may list either form.
+
+### Example
+```python
+# BEFORE (loses subdomain — news.ycombinator.com → ycombinator.com, no match)
+domain = self._extract_registered_domain(url, display_link)
+for rule in rules:
+    if domain in rule.domains:
+        return match
+
+# AFTER (checks both forms)
+full_domain = self._normalize_domain(display_link, url)  # news.ycombinator.com
+registered_domain = self._extract_registered_domain(url, display_link)  # ycombinator.com
+for rule in rules:
+    if full_domain in rule.domains or registered_domain in rule.domains:
+        return match
+```
+
+### Applies to
+T3.2 (ResultCategorizer), T3.x (any future domain-based classification), and any module that matches URLs against curated domain lists.
+
+---
+
+## L017 — Put classification rules in JSON config for extensibility without code changes
+
+**Date:** 2026-03-22
+**Source:** Task T3.2 (positive — design decision)
+**Category:** pattern
+**Tags:** config-driven, json, extensibility, categorization, domain-matching
+
+### Learning
+Hardcoding domain lists and keyword patterns in Python source makes adding new domains or categories require a code change, review, and deploy. Moving these rules to a JSON config file (like `config/search_categories.json`) lets operators update classification behavior without touching Python code, following the same pattern established by `config/platforms.json` (T2.1) and `config/data_brokers.json` (T3.1).
+
+### Rule
+When building rule-based classifiers or matchers, put all domain lists, keyword patterns, and category definitions in a JSON config file. Load and parse at initialization time. Log warnings for unknown/invalid entries rather than crashing.
+
+### Example
+```python
+# BEFORE (hardcoded — requires code change to add domain)
+SOCIAL_DOMAINS = {"twitter.com", "facebook.com", "reddit.com"}
+
+# AFTER (config-driven — add domains via JSON)
+raw = json.loads(config_path.read_text())
+for cat_name, cat_config in raw["categories"].items():
+    rules.append(_CategoryRule(
+        domains=frozenset(cat_config.get("domains", [])),
+        ...
+    ))
+```
+
+### Applies to
+T3.2 (search_categories.json), T3.x (future classifiers), T4.x (risk taxonomy), and any module that classifies data against curated rule sets.
+
+---
+
 <!--
 TEMPLATE — copy this for each new learning:
 
@@ -633,6 +701,8 @@ TEMPLATE — copy this for each new learning:
 - L012: Set SQLAlchemy UUID ids explicitly at construction for test usability
 - L013: Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule
 - L014: Use removeprefix for domain extraction, not lstrip
+- L016: Check both full domain and registered domain when matching config entries
+- L017: Put classification rules in JSON config for extensibility
 
 ### Testing techniques
 - L004: Exclude `tests/` from high-entropy string CI scans
@@ -664,8 +734,10 @@ TEMPLATE — copy this for each new learning:
 | `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 1 | T3.1 search.py |
 | BFS via `asyncio.Queue` with visited set, `asyncio.wait_for()` for timeout, explicit id=uuid4() | T2.6 | 0 | — |
 | `@dataclass(frozen=True) ConfigClass` as single module init param (L013 pattern) | T3.1 | 0 | — |
-| Domain normalization: `.lower().removeprefix("www.")` for case-insensitive matching (L014 pattern) | T3.1 | 0 | — |
-| Test path anchoring: `Path(__file__).parents[N] / "relative/path"` for config loading (L015 pattern) | T3.1 | 0 | — |
+| Domain normalization: `.lower().removeprefix("www.")` for case-insensitive matching (L014 pattern) | T3.1 | 1 | T3.2 categorizer.py |
+| Test path anchoring: `Path(__file__).parents[N] / "relative/path"` for config loading (L015 pattern) | T3.1 | 1 | T3.2 test_result_categorizer.py |
+| Two-pass domain check: full domain then registered domain for config matching (L016 pattern) | T3.2 | 0 | — |
+| Config-driven classifier: domain/keyword rules in JSON, parsed at init (L017 pattern) | T3.2 | 0 | — |
 
 ---
 
