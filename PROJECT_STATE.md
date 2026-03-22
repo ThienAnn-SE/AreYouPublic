@@ -2,9 +2,9 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-22 — Phase 3 Task T3.1 Search Engine Enumeration (COMPLETE)
+**Last updated:** 2026-03-22 — Phase 3 Task T3.2 ResultCategorizer (COMPLETE)
 **Updated by:** Claude Code
-**Current phase:** Phase 3 — Search & domain intelligence (T3.1 COMPLETE → T3.2 next)
+**Current phase:** Phase 3 — Search & domain intelligence (T3.2 COMPLETE → T3.3 next)
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
@@ -100,6 +100,7 @@ piea/
 │       │   │   └── module.py           [Status: created — T2.4]
 │       │   ├── graph_crawler.py        [Status: created — T2.6]
 │       │   ├── search.py              [Status: created — T3.1]
+│       │   ├── categorizer.py         [Status: created — T3.2]
 │       │   ├── domain_intel.py         [Status: not created]
 │       │   ├── paste_monitor.py        [Status: not created]
 │       │   └── extractors/
@@ -154,14 +155,15 @@ piea/
 │   │   ├── test_username_module.py   [Status: created — T2.4]
 │   │   ├── test_extractors.py        [Status: created — T2.5]
 │   │   ├── test_graph_crawler.py      [Status: created — T2.6]
-│   │   └── test_search.py             [Status: created — T3.1]
+│   │   ├── test_search.py             [Status: created — T3.1]
+│   │   └── test_result_categorizer.py [Status: created — T3.2]
 │   └── integration/
 │       └── __init__.py                 [Status: created — T0.6]
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 70 created / ~65 planned
-**Last hierarchy update:** 2026-03-21
+**File count:** 73 created / ~65 planned
+**Last hierarchy update:** 2026-03-22
 
 ---
 
@@ -174,7 +176,7 @@ piea/
 | 0 | Project setup & ethics | COMPLETE | 7 | 7 | No — pending `docker compose up` verification |
 | 1 | Breach exposure module | COMPLETE | 6 | 6 | No — pending integration test with real HIBP API key |
 | 2 | Username enum & graph crawler | COMPLETE | 6 | 14 | No — all Phase 2 tasks complete |
-| 3 | Search & domain intelligence | IN PROGRESS | 1 | 8 | No — T3.1 complete, T3.2 next |
+| 3 | Search & domain intelligence | IN PROGRESS | 2 | 8 | No — T3.2 complete, T3.3 next |
 | 4 | Risk scoring engine | NOT STARTED | 0 | 7 | No |
 | 5 | Scan orchestration & API | NOT STARTED | 0 | 7 | No |
 | 6 | Frontend & report UI | NOT STARTED | 0 | 12 | No |
@@ -190,7 +192,8 @@ COMPLETE:   T2.4 — Implement UsernameModule (BaseModule interface, batch resul
 COMPLETE:   T2.5 — Platform-specific extractors (9 files, bio parser, 47 tests, 166 total)
 COMPLETE:   T2.6 — Graph crawler implementation (BFS with rate limiting, 27 tests, 90% coverage)
 COMPLETE:   T3.1 — Search engine enumeration module (SearchModule, 22 broker config, 22 tests, 91% coverage)
-NEXT UP:    T3.2 — ResultCategorizer class (categorizes search results)
+COMPLETE:   T3.2 — ResultCategorizer (4-tier matching, 6 categories, config-driven, 36 tests, 99% module coverage)
+NEXT UP:    T3.3 — Entity disambiguation logic (EntityResolver class)
 ```
 
 ### 3.3 Completed tasks log
@@ -219,6 +222,7 @@ NEXT UP:    T3.2 — ResultCategorizer class (categorizes search results)
 | T2.5 | Implement platform-specific profile extractors (9 modules, bio parser, 47 tests) | 2026-03-21 | src/piea/modules/extractors/__init__.py, models.py, base.py, bio_parser.py, github.py, mastodon.py, keybase.py, gitlab.py, gravatar.py, reddit.py, tests/unit/test_extractors.py |
 | T2.6 | Implement graph crawler with BFS, rate limiting, SQLAlchemy persistence (27 tests, 90% coverage) | 2026-03-21 | src/piea/modules/graph_crawler.py, tests/unit/test_graph_crawler.py |
 | T3.1 | Implement search engine enumeration module (Google CSE, dynamic queries, broker detection, 22 tests) | 2026-03-22 | src/piea/modules/search.py, config/data_brokers.json, tests/unit/test_search.py |
+| T3.2 | Implement ResultCategorizer with 4-tier matching (domain/suffix/URL keyword/snippet keyword, 36 tests) | 2026-03-22 | src/piea/modules/categorizer.py, config/search_categories.json, tests/unit/test_result_categorizer.py |
 
 ---
 
@@ -360,6 +364,22 @@ FIELDS:
   - platform: str
   - confidence: float
 USED BY: BioParser.parse(), extractor implementations
+
+MODEL: ResultCategory (StrEnum)
+FILE: src/piea/modules/categorizer.py
+CREATED AT: Task T3.2
+VALUES: social, news, professional, forum, data_broker, uncategorized
+USED BY: CategorizedResult, ResultCategorizer
+
+MODEL: CategorizedResult (frozen dataclass, slots=True)
+FILE: src/piea/modules/categorizer.py
+CREATED AT: Task T3.2
+FIELDS:
+  - result: SearchHit
+  - category: ResultCategory
+  - confidence: float (0.0 to 1.0)
+  - match_reason: str (domain_exact | domain_suffix | keyword_url | keyword_snippet | default)
+USED BY: ResultCategorizer.categorize(), categorize_batch()
 ```
 
 ### 4.3 Username module public interfaces
@@ -553,6 +573,46 @@ Key design notes:
   - Rate-limit (429) returns success=False with partial findings, not exception
   - Broker domain matching uses removeprefix (not lstrip) per L012 learning
   - Test paths anchored with Path(__file__).parents[2] / "config" per L012
+```
+
+### 4.3d ResultCategorizer interface
+
+```
+Status: CREATED (Task T3.2)
+File: src/piea/modules/categorizer.py
+Config: config/search_categories.json
+
+Model: ResultCategory (StrEnum)
+  VALUES: social, news, professional, forum, data_broker, uncategorized
+
+Model: CategorizedResult (frozen dataclass)
+  - result: SearchHit
+  - category: ResultCategory
+  - confidence: float (0.0 to 1.0)
+  - match_reason: str (domain_exact, domain_suffix, keyword_url, keyword_snippet, default)
+
+Interface: ResultCategorizer
+  __init__(config_path: Path | None = None)
+    Loads search_categories.json, builds domain lookup and keyword patterns
+
+  categorize(hit: SearchHit) -> CategorizedResult
+    4-tier matching: exact domain (1.0) → suffix (0.9) → URL keyword (0.7) → snippet (0.5)
+    Delegates to _match_exact_domain, _match_domain_suffix, _match_url_keyword, _match_snippet_keyword
+    Falls back to UNCATEGORIZED (0.0) if no match
+
+  categorize_batch(hits: list[SearchHit]) -> list[CategorizedResult]
+    Maps categorize() over list
+
+Key design notes:
+  - Config-driven: all domain mappings and keyword patterns in JSON, no hardcoded lists
+  - Domain matching checks both full domain (news.ycombinator.com) and registered domain (ycombinator.com)
+  - Each tier extracted to private method to keep categorize() under 20 lines (CODING_RULES)
+  - Snippet keywords use re.escape() to prevent ReDoS
+  - Unknown categories in config are skipped with warning log (forward-compatible)
+
+Dependencies:
+  - Imports SearchHit from piea.modules.search (T3.1)
+  - Used by: SearchModule (future integration), report generation
 ```
 
 ### 4.4 API endpoint registry
