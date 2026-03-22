@@ -213,6 +213,28 @@ For each external library this task uses:
 
 **Goal:** Determine whether you have sufficient knowledge/patterns to implement this task correctly on the first attempt.
 
+### Step 3.0 — Check the Claude Code skills plugin catalog  ← START HERE
+
+**Before checking project-local skills, use the `Skill` tool to check the Claude Code plugin skills catalog.**
+
+Per the `using-superpowers` principle: *if there is even a 1% chance a skill applies, invoke it*. Skipping this step is a process violation — the plugin skill system holds workflow guidance (brainstorming, TDD, planning) that overrides default behavior.
+
+```
+Check the following skill types for applicability to this task:
+
+  | Condition                                      | Skill to invoke                          |
+  |------------------------------------------------|------------------------------------------|
+  | Any feature creation, new behavior, or design  | anthropic-skills:brainstorming           |
+  | Multi-step implementation (spec exists)        | anthropic-skills:writing-plans           |
+  | Guided feature development                     | feature-dev:feature-dev                  |
+  | Before writing ANY implementation code         | anthropic-skills:test-driven-development |
+  | Fixing a bug or failing test                   | anthropic-skills:systematic-debugging    |
+  | Before claiming work complete or creating PR   | anthropic-skills:verification-before-completion |
+
+Invoke each applicable skill via the Skill tool BEFORE writing any code.
+The skill content returned must be followed — it provides workflow discipline, not suggestions.
+```
+
 ### Step 3.1 — Identify required skills
 
 For the current task, list every technical skill required:
