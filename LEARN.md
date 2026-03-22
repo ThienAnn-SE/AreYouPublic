@@ -22,6 +22,9 @@
 | L010 | 2026-03-21 | Task T2.4 (positive) | pattern | module-design, execute-pattern, result-aggregation | Extract result aggregation logic to dedicated method to keep execute() under 20 lines |
 | L011 | 2026-03-21 | Task T2.5 (positive) | pattern | profile-extraction, bio-parsing, regex | Use span tracking in regex extraction to avoid overlapping token matches in bio text |
 | L012 | 2026-03-21 | Task T2.6 (positive) | pattern | sqlalchemy, orm, id-generation, unit-testing | Set SQLAlchemy UUID ids explicitly at object construction time for test usability |
+| L013 | 2026-03-22 | Task T3.1 (positive) | pattern | module-design, dataclass, constructor-params | Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule |
+| L014 | 2026-03-22 | Task T3.1 (positive) | pattern | domain-extraction, string-manipulation | Use removeprefix for domain extraction, not lstrip — lstrip removes chars, removeprefix removes prefix only |
+| L015 | 2026-03-22 | Task T3.1 (positive) | testing | test-path-anchoring, pathlib, config-loading | Anchor test paths using Path(__file__).parents[N] instead of hardcoded relative paths |
 
 ---
 
@@ -470,6 +473,114 @@ T2.6 (GraphNode, GraphEdge persistence), T3.x (any new tables with UUID PKs), an
 
 ---
 
+## L013 — Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule
+
+**Date:** 2026-03-22
+**Source:** Task T3.1 (positive — SearchModule implementation)
+**Category:** pattern
+**Tags:** module-design, dataclass, constructor-params, dependency-injection
+
+### Learning
+Modules that need multiple configuration parameters (API keys, engine IDs, max values, timeouts) violate the 3-parameter rule if each is passed separately. Grouping them into a frozen dataclass (`SearchModuleConfig`) allows a single `config` parameter while keeping the constructor clean.
+
+### Rule
+When a module init requires more than 3 parameters, create a frozen dataclass to group related config values. Pass the dataclass as a single `config` parameter. This keeps the constructor signature clean and makes configuration testable in isolation.
+
+### Example
+```python
+# BEFORE (violates 3-param rule)
+class SearchModule(BaseModule):
+    def __init__(self, api_key: str, search_engine_id: str, max_queries: int, cache: CacheLayer, httpx_client: httpx.AsyncClient):
+        self.api_key = api_key
+        self.search_engine_id = search_engine_id
+        # ...
+
+# AFTER (clean — config grouped)
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class SearchModuleConfig:
+    api_key: str
+    search_engine_id: str
+    max_queries: int = 3
+
+class SearchModule(BaseModule):
+    def __init__(self, config: SearchModuleConfig, cache: CacheLayer):
+        self.config = config
+        self._cache = cache
+```
+
+### Applies to
+T3.1 (SearchModule), T3.2 (ResultCategorizer), T4.x (risk scoring modules), and any future module with more than 3 init parameters.
+
+---
+
+## L014 — Use removeprefix for domain extraction, not lstrip
+
+**Date:** 2026-03-22
+**Source:** Task T3.1 (positive — broker domain matching)
+**Category:** pattern
+**Tags:** domain-extraction, string-manipulation, text-normalization
+
+### Learning
+`str.lstrip("www.")` removes any chars from the set {'w', '.'} from the left, not the prefix "www." as a unit. On "www.google.com", it removes "www." correctly, but on "w.google.com" it also removes the leading "w", breaking the domain. Use `str.removeprefix()` (Python 3.9+) to safely remove a literal prefix.
+
+### Rule
+Never use `lstrip()` to remove prefixes from strings. Always use `removeprefix()` for safe, predictable prefix removal. If the target must be compatible with Python < 3.9, use slicing with a conditional check.
+
+### Example
+```python
+# BEFORE (lstrip removes chars, not prefix — breaks on edge cases)
+domain = "w.google.com"
+normalized = domain.lstrip("www.")  # Returns ".google.com" (WRONG!)
+
+# AFTER (correct — removes prefix only)
+normalized = domain.removeprefix("www.")  # Returns "w.google.com" (correct)
+
+# For Python < 3.9:
+normalized = domain[4:] if domain.startswith("www.") else domain
+```
+
+### Applies to
+T3.1 (domain normalization in broker matching), T3.2+ (any URL/domain parsing module), and general string processing across the codebase.
+
+---
+
+## L015 — Anchor test paths using Path(__file__).parents[N] instead of hardcoded relative paths
+
+**Date:** 2026-03-22
+**Source:** Task T3.1 (positive — test config file loading)
+**Category:** testing
+**Tags:** test-path-anchoring, pathlib, config-loading, relative-paths
+
+### Learning
+Tests that load config files using hardcoded relative paths like `Path("config/data_brokers.json")` fail when the test runner's working directory is not the project root. Using `Path(__file__).parents[N]` anchors paths to the test file's location, working regardless of cwd.
+
+### Rule
+In any test that loads external files (fixtures, config, data), construct the path using `Path(__file__).parents[N] / "relative/path/to/file"`. This makes tests independent of cwd.
+
+### Example
+```python
+# BEFORE (fails if cwd != project root)
+import json
+from pathlib import Path
+def test_load_brokers():
+    brokers_path = Path("config/data_brokers.json")
+    brokers = json.loads(brokers_path.read_text())
+    # pytest from tests/ or src/ cwd breaks this
+
+# AFTER (correct — anchored to test file)
+def test_load_brokers():
+    brokers_path = Path(__file__).parents[2] / "config" / "data_brokers.json"
+    brokers = json.loads(brokers_path.read_text())
+    # Works from any cwd
+```
+
+### Applies to
+T3.1 (test_search.py config loading), T2.x (any test loading config/fixtures), and all future tests that depend on external data files.
+
+---
+
 <!--
 TEMPLATE — copy this for each new learning:
 
@@ -520,11 +631,14 @@ TEMPLATE — copy this for each new learning:
 - L010: Extract result aggregation to keep execute() under 20 lines
 - L011: Use span tracking in regex extraction to avoid overlapping token matches
 - L012: Set SQLAlchemy UUID ids explicitly at construction for test usability
+- L013: Group module configuration into frozen dataclass to keep __init__ under 3-parameter rule
+- L014: Use removeprefix for domain extraction, not lstrip
 
 ### Testing techniques
 - L004: Exclude `tests/` from high-entropy string CI scans
 - L005: Set coverage threshold to current project state; raise incrementally
 - L002: SQLite needs explicit type overrides for PostgreSQL types
+- L015: Anchor test paths using Path(__file__).parents[N]
 
 ### Architecture decisions
 (None yet)
@@ -545,10 +659,13 @@ TEMPLATE — copy this for each new learning:
 | Pattern | First used at | Times reused | Skill file |
 |---------|-------------|-------------|-----------|
 | `async def get_X() -> AsyncGenerator[X, None]: yield; finally: close()` DI provider | T1.5 | 0 | — |
-| `except httpx.HTTPStatusError: raise ModuleAPIError(...) from None` | T1.5 | 0 | — |
+| `except httpx.HTTPStatusError: raise ModuleAPIError(...) from None` | T1.5 | 1 | T3.1 search.py |
 | `DATABASE_URL` env var priority in conftest with SQLite type overrides | T1.5 | 0 | — |
-| `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 0 | — |
+| `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 1 | T3.1 search.py |
 | BFS via `asyncio.Queue` with visited set, `asyncio.wait_for()` for timeout, explicit id=uuid4() | T2.6 | 0 | — |
+| `@dataclass(frozen=True) ConfigClass` as single module init param (L013 pattern) | T3.1 | 0 | — |
+| Domain normalization: `.lower().removeprefix("www.")` for case-insensitive matching (L014 pattern) | T3.1 | 0 | — |
+| Test path anchoring: `Path(__file__).parents[N] / "relative/path"` for config loading (L015 pattern) | T3.1 | 0 | — |
 
 ---
 

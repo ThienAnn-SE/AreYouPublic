@@ -1,0 +1,26 @@
+{
+  "brokers": [
+    {"domain": "spokeo.com",         "optout_url": "https://www.spokeo.com/opt_out/new"},
+    {"domain": "beenverified.com",   "optout_url": "https://www.beenverified.com/app/optout/search"},
+    {"domain": "whitepages.com",     "optout_url": "https://www.whitepages.com/suppression-requests"},
+    {"domain": "peoplefinder.com",   "optout_url": "https://www.peoplefinder.com/optout.php"},
+    {"domain": "intelius.com",       "optout_url": "https://www.intelius.com/opt-out"},
+    {"domain": "radaris.com",        "optout_url": "https://radaris.com/page/how-to-remove"},
+    {"domain": "pipl.com",           "optout_url": "https://pipl.com/personal-information-removal-request"},
+    {"domain": "instantcheckmate.com","optout_url": "https://www.instantcheckmate.com/opt-out"},
+    {"domain": "truthfinder.com",    "optout_url": "https://www.truthfinder.com/opt-out"},
+    {"domain": "mylife.com",         "optout_url": "https://www.mylife.com/ccpa/index.pubview"},
+    {"domain": "usphonebook.com",    "optout_url": "https://www.usphonebook.com/opt-out"},
+    {"domain": "fastpeoplesearch.com","optout_url": "https://www.fastpeoplesearch.com/removal"},
+    {"domain": "thatsthem.com",      "optout_url": "https://thatsthem.com/optout"},
+    {"domain": "peekyou.com",        "optout_url": "https://www.peekyou.com/about/contact/ccpa_optout"},
+    {"domain": "addresses.com",      "optout_url": "https://www.addresses.com/optout.php"},
+    {"domain": "clustrmaps.com",     "optout_url": "https://clustrmaps.com/bl/opt-out"},
+    {"domain": "411.com",            "optout_url": "https://www.411.com/privacy/optout"},
+    {"domain": "usapeople.search",   "optout_url": "https://www.usapeople.search/opt-out"},
+    {"domain": "publicrecordsnow.com","optout_url": "https://www.publicrecordsnow.com/static/view/optout"},
+    {"domain": "checkpeople.com",    "optout_url": "https://checkpeople.com/opt-out"},
+    {"domain": "anywho.com",         "optout_url": "https://www.anywho.com/optout"},
+    {"domain": "peoplebyname.com",   "optout_url": "https://www.peoplebyname.com/remove.php"}
+  ]
+}

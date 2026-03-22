@@ -13,6 +13,7 @@
 3. **Before any task** read: `PROJECT_STATE.md` (current state), `FAIL.md` (failures to avoid), `LEARN.md` (proven patterns).
 4. **Before writing code** read: `CODING_RULES.md` (naming, functions, forbidden patterns) once per session.
 5. **Phase 5S is mandatory** — run security verification per `SECURITY_WORKFLOW.md` before every commit.
+6. **Use the Claude Code skills plugin** — at PROCESS.md Phase 3 Step 3.0, invoke the `Skill` tool to check the plugin catalog before any implementation. Skills provide workflow discipline that overrides default behavior. If any skill has a 1% chance of applying → invoke it. See `PROCESS.md Phase 3 Step 3.0` for the full lookup table.
 
 ---
 
@@ -47,6 +48,7 @@ These are **required gates**, not suggestions. Skipping any delegation is a proc
 | When | Invoke | What it does |
 |------|--------|--------------|
 | Start of every task (before writing any code) | `@agent-process-executor` | Runs Phases 1-4 in isolation; returns a ready-to-implement plan |
+| Phase 3 Step 3.0 (before implementation code) | `Skill` tool — see lookup table in PROCESS.md Phase 3 Step 3.0 | Check plugin catalog; invoke brainstorming / TDD / writing-plans as applicable |
 | After every file written in Phase 5 | `@agent-code-reviewer` | Haiku-model review against CODING_RULES.md; Critical findings must be fixed |
 | After Phase 5, before Phase 6 | `@agent-security-auditor` | Runs all 6 Phase 5S security gates; must return PASS ✓ |
 | Phase 7 state update (after tests pass) | `@agent-state-updater` | Updates PROJECT_STATE.md, FAIL.md, LEARN.md; names the next task |
