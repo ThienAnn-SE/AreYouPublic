@@ -2,9 +2,9 @@
 
 **Purpose:** This file is Claude Code's persistent memory. It prevents hallucination, context drift, and contradictory decisions across tasks. Claude Code must read this file before starting any task and update it after completing any task.
 
-**Last updated:** 2026-03-21 — Phase 2 Task T2.6 Graph Crawler Implementation (COMPLETE)
+**Last updated:** 2026-03-22 — Phase 3 Task T3.1 Search Engine Enumeration (COMPLETE)
 **Updated by:** Claude Code
-**Current phase:** Phase 2 — Username enumeration & graph crawler (COMPLETE → T3.1 next)
+**Current phase:** Phase 3 — Search & domain intelligence (T3.1 COMPLETE → T3.2 next)
 **Repository:** https://github.com/ThienAnn-SE/AreYouPublic (public)
 
 ---
@@ -99,7 +99,7 @@ piea/
 │       │   │   ├── rate_limiter.py     [Status: created — T2.3]
 │       │   │   └── module.py           [Status: created — T2.4]
 │       │   ├── graph_crawler.py        [Status: created — T2.6]
-│       │   ├── search.py              [Status: not created]
+│       │   ├── search.py              [Status: created — T3.1]
 │       │   ├── domain_intel.py         [Status: not created]
 │       │   ├── paste_monitor.py        [Status: not created]
 │       │   └── extractors/
@@ -135,6 +135,7 @@ piea/
 │           └── scan_task.py            [Status: not created]
 ├── config/
 │   ├── platforms.json                  [Status: created — T2.1]
+│   ├── data_brokers.json               [Status: created — T3.1]
 │   └── risk_taxonomy.json              [Status: not created]
 ├── frontend/                           [Status: not created — Phase 6]
 ├── tests/
@@ -152,13 +153,14 @@ piea/
 │   │   ├── test_username_checker.py  [Status: created — T2.2]
 │   │   ├── test_username_module.py   [Status: created — T2.4]
 │   │   ├── test_extractors.py        [Status: created — T2.5]
-│   │   └── test_graph_crawler.py      [Status: created — T2.6]
+│   │   ├── test_graph_crawler.py      [Status: created — T2.6]
+│   │   └── test_search.py             [Status: created — T3.1]
 │   └── integration/
 │       └── __init__.py                 [Status: created — T0.6]
 └── docs/                               [Status: not created — Phase 7]
 ```
 
-**File count:** 67 created / ~65 planned
+**File count:** 70 created / ~65 planned
 **Last hierarchy update:** 2026-03-21
 
 ---
@@ -171,8 +173,8 @@ piea/
 |-------|------|--------|-----------|------------|-------------------|
 | 0 | Project setup & ethics | COMPLETE | 7 | 7 | No — pending `docker compose up` verification |
 | 1 | Breach exposure module | COMPLETE | 6 | 6 | No — pending integration test with real HIBP API key |
-| 2 | Username enum & graph crawler | COMPLETE | 6 | 14 | No — all Phase 2 tasks complete, awaiting Phase 3 |
-| 3 | Search & domain intelligence | NOT STARTED | 0 | 8 | No |
+| 2 | Username enum & graph crawler | COMPLETE | 6 | 14 | No — all Phase 2 tasks complete |
+| 3 | Search & domain intelligence | IN PROGRESS | 1 | 8 | No — T3.1 complete, T3.2 next |
 | 4 | Risk scoring engine | NOT STARTED | 0 | 7 | No |
 | 5 | Scan orchestration & API | NOT STARTED | 0 | 7 | No |
 | 6 | Frontend & report UI | NOT STARTED | 0 | 12 | No |
@@ -187,7 +189,8 @@ COMPLETE:   T2.3 — Build per-platform rate limiter (token bucket, exponential 
 COMPLETE:   T2.4 — Implement UsernameModule (BaseModule interface, batch result aggregation)
 COMPLETE:   T2.5 — Platform-specific extractors (9 files, bio parser, 47 tests, 166 total)
 COMPLETE:   T2.6 — Graph crawler implementation (BFS with rate limiting, 27 tests, 90% coverage)
-NEXT UP:    T3.1 — Search engine enumeration module
+COMPLETE:   T3.1 — Search engine enumeration module (SearchModule, 22 broker config, 22 tests, 91% coverage)
+NEXT UP:    T3.2 — ResultCategorizer class (categorizes search results)
 ```
 
 ### 3.3 Completed tasks log
@@ -215,6 +218,7 @@ NEXT UP:    T3.1 — Search engine enumeration module
 | T2.4 | Implement UsernameModule (BaseModule interface, batch result aggregation, error handling) | 2026-03-21 | src/piea/modules/username/module.py, tests/unit/test_username_module.py, src/piea/modules/username/__init__.py |
 | T2.5 | Implement platform-specific profile extractors (9 modules, bio parser, 47 tests) | 2026-03-21 | src/piea/modules/extractors/__init__.py, models.py, base.py, bio_parser.py, github.py, mastodon.py, keybase.py, gitlab.py, gravatar.py, reddit.py, tests/unit/test_extractors.py |
 | T2.6 | Implement graph crawler with BFS, rate limiting, SQLAlchemy persistence (27 tests, 90% coverage) | 2026-03-21 | src/piea/modules/graph_crawler.py, tests/unit/test_graph_crawler.py |
+| T3.1 | Implement search engine enumeration module (Google CSE, dynamic queries, broker detection, 22 tests) | 2026-03-22 | src/piea/modules/search.py, config/data_brokers.json, tests/unit/test_search.py |
 
 ---
 
@@ -506,6 +510,49 @@ Key design notes:
   - GraphNode.id and GraphEdge.id set explicitly at construction (L012 pattern)
   - Error messages exclude identifiers — no PII leaking (L007 compliance)
   - _IDENTIFIER_RE validates no slashes/colons in identifiers (NFR-S3)
+```
+
+### 4.3c Search module interface
+
+```
+Status: CREATED (Task T3.1)
+File: src/piea/modules/search.py
+
+Configuration: SearchModuleConfig (frozen dataclass)
+  - api_key: str (Google Custom Search API key)
+  - search_engine_id: str (Google Custom Search Engine ID)
+  - max_queries: int (default: 3, limits query variations per search)
+
+Data: SearchClient (httpx-based)
+  async search(query: str) -> dict[str, Any] | None
+    Makes paginated Google Custom Search JSON API requests
+    Catches httpx.HTTPStatusError and re-raises as ModuleAPIError (L007)
+    Returns None on 429 (partial findings ok per design)
+
+Interface: SearchModule (implements BaseModule)
+  name -> "search"
+  async execute(inputs: ScanInputs) -> ModuleResult
+    - If no email: return early (email-only module)
+    - Constructs up to 3 search queries (username@*, username site:data-broker, etc.)
+    - Calls search() for each query
+    - Detects data broker domains in results using domain matching
+    - Aggregates into ModuleFinding per broker discovered
+
+Broker detection:
+  - display_link normalized: .lower().removeprefix("www.")
+  - Extract last 2 labels (domain.tld) via rsplit(".", 1)
+  - Match against 22 broker domains from config/data_brokers.json
+
+Data models:
+  - SearchResult (frozen dataclass): title, link, display_link, snippet
+  - SearchAPIResponse (frozen dataclass): items, queries
+  - Evidence dict typed dict[str, Any] per L003 (not object)
+
+Key design notes:
+  - SearchModuleConfig dataclass groups 4 init params → single-param rule
+  - Rate-limit (429) returns success=False with partial findings, not exception
+  - Broker domain matching uses removeprefix (not lstrip) per L012 learning
+  - Test paths anchored with Path(__file__).parents[2] / "config" per L012
 ```
 
 ### 4.4 API endpoint registry
