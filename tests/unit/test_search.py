@@ -1,4 +1,4 @@
-"""Unit tests for the Search module (T3.1).
+"""Unit tests for the Search module (T3.1 / T3.3).
 
 Tests cover:
   - Query construction (_build_queries, Option A strategy)
@@ -7,6 +7,8 @@ Tests cover:
   - SearchClient: success path, empty results, 429 retry, 403 quota, 5xx error
   - SearchModule.execute(): full success, quota failure, missing config,
     no inputs, entity disambiguation (name-only → INFO severity)
+  - EntityResolver: common-name detection, signal extraction, result matching,
+    filter_results logic (T3.3)
 """
 
 from __future__ import annotations
@@ -19,13 +21,17 @@ import respx
 
 from piea.modules.base import ScanInputs, Severity
 from piea.modules.search import (
+    COMMON_NAMES,
     GOOGLE_CSE_BASE,
     DataBrokerDetector,
+    DisambiguationResult,
+    EntityResolver,
     ResultCategorizer,
     SearchAPIError,
     SearchClient,
     SearchModule,
     SearchQuotaError,
+    SearchResult,
     _extract_domain,
     _sanitize,
 )
@@ -542,3 +548,303 @@ class TestSearchModuleExecute:
             )
         )
         assert module.name == "search"
+
+
+# ---------------------------------------------------------------------------
+# EntityResolver (T3.3)
+# ---------------------------------------------------------------------------
+
+
+def _make_result(
+    title: str = "",
+    snippet: str = "",
+    url: str = "https://example.com",
+    category: str = "uncategorized",
+    is_data_broker: bool = False,
+    opt_out_url: str | None = None,
+) -> SearchResult:
+    """Build a minimal SearchResult for testing."""
+    return SearchResult(
+        title=title,
+        snippet=snippet,
+        url=url,
+        display_link="example.com",
+        category=category,
+        is_data_broker=is_data_broker,
+        opt_out_url=opt_out_url,
+    )
+
+
+class TestEntityResolverIsCommonName:
+    """Tests for EntityResolver.is_common_name()."""
+
+    def test_common_first_name_returns_true(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("John Smith") is True
+
+    def test_common_first_name_case_insensitive(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("MARY Johnson") is True
+
+    def test_uncommon_name_returns_false(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("Xiomara Quetzalcoatl") is False
+
+    def test_none_returns_false(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name(None) is False
+
+    def test_empty_string_returns_false(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("") is False
+
+    def test_whitespace_only_returns_false(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("   ") is False
+
+    def test_single_common_name_token_returns_true(self):
+        resolver = EntityResolver()
+        assert resolver.is_common_name("james") is True
+
+    def test_custom_common_names_set_used(self):
+        resolver = EntityResolver(common_names=frozenset({"zeus"}))
+        assert resolver.is_common_name("Zeus Thunderbolt") is True
+        assert resolver.is_common_name("John Smith") is False
+
+    def test_common_names_constant_non_empty(self):
+        assert len(COMMON_NAMES) > 0
+
+    def test_all_names_in_constant_are_lowercase(self):
+        assert all(n == n.lower() for n in COMMON_NAMES)
+
+
+class TestEntityResolverExtractSignals:
+    """Tests for EntityResolver.extract_signals()."""
+
+    def test_email_and_username_extracted(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(
+            ScanInputs(email="alice@example.com", username="alice99")
+        )
+        assert "alice@example.com" in signals
+        assert "alice99" in signals
+
+    def test_full_name_excluded(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(ScanInputs(full_name="John Smith"))
+        assert signals == []
+
+    def test_signals_are_lowercased(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(ScanInputs(email="ALICE@Example.COM"))
+        assert "alice@example.com" in signals
+
+    def test_extra_signals_included(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(
+            ScanInputs(email="a@b.com"),
+            extra_signals=["Acme Corp", "New York"],
+        )
+        assert "acme corp" in signals
+        assert "new york" in signals
+
+    def test_none_inputs_yield_empty_list(self):
+        resolver = EntityResolver()
+        assert resolver.extract_signals(ScanInputs()) == []
+
+    def test_duplicate_signals_deduplicated(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(
+            ScanInputs(email="a@b.com"),
+            extra_signals=["a@b.com"],
+        )
+        assert signals.count("a@b.com") == 1
+
+    def test_blank_extra_signals_ignored(self):
+        resolver = EntityResolver()
+        signals = resolver.extract_signals(ScanInputs(), extra_signals=["", "  "])
+        assert signals == []
+
+
+class TestEntityResolverResultMatchesSignal:
+    """Tests for EntityResolver.result_matches_signal()."""
+
+    def test_email_in_snippet_matches(self):
+        resolver = EntityResolver()
+        result = _make_result(snippet="Contact: alice@example.com for more info.")
+        assert resolver.result_matches_signal(result, ["alice@example.com"]) is True
+
+    def test_username_in_title_matches(self):
+        resolver = EntityResolver()
+        result = _make_result(title="Profile page of alice99")
+        assert resolver.result_matches_signal(result, ["alice99"]) is True
+
+    def test_signal_in_url_matches(self):
+        resolver = EntityResolver()
+        result = _make_result(url="https://example.com/user/alice99")
+        assert resolver.result_matches_signal(result, ["alice99"]) is True
+
+    def test_no_signal_match_returns_false(self):
+        resolver = EntityResolver()
+        result = _make_result(title="Generic page", snippet="Nothing relevant here.")
+        assert (
+            resolver.result_matches_signal(result, ["alice99", "alice@example.com"])
+            is False
+        )
+
+    def test_empty_signals_returns_false(self):
+        resolver = EntityResolver()
+        result = _make_result(snippet="alice99 is here")
+        assert resolver.result_matches_signal(result, []) is False
+
+    def test_matching_is_case_insensitive(self):
+        resolver = EntityResolver()
+        result = _make_result(snippet="Works at ACME CORP in Finance.")
+        assert resolver.result_matches_signal(result, ["acme corp"]) is True
+
+    def test_any_one_signal_sufficient(self):
+        resolver = EntityResolver()
+        result = _make_result(snippet="Profile of alice99.")
+        # Only the second signal matches
+        assert resolver.result_matches_signal(result, ["nomatch", "alice99"]) is True
+
+
+class TestEntityResolverFilterResults:
+    """Tests for EntityResolver.filter_results()."""
+
+    def _results_with_and_without_signal(self) -> list[SearchResult]:
+        return [
+            _make_result(snippet="alice@example.com is here", url="https://a.com"),
+            _make_result(snippet="no signal at all", url="https://b.com"),
+            _make_result(title="alice@example.com profile", url="https://c.com"),
+        ]
+
+    def test_non_common_name_passes_all_through(self):
+        resolver = EntityResolver()
+        results = self._results_with_and_without_signal()
+        disambiguation = resolver.filter_results(
+            results,
+            ScanInputs(full_name="Xiomara Quetzalcoatl", email="alice@example.com"),
+        )
+        assert disambiguation.is_common_name is False
+        assert disambiguation.has_secondary_signals is False
+        assert len(disambiguation.matched_results) == 3
+        assert disambiguation.filtered_count == 0
+
+    def test_common_name_with_signal_filters_non_matching(self):
+        resolver = EntityResolver()
+        results = self._results_with_and_without_signal()
+        disambiguation = resolver.filter_results(
+            results, ScanInputs(full_name="John Smith", email="alice@example.com")
+        )
+        assert disambiguation.is_common_name is True
+        assert disambiguation.has_secondary_signals is True
+        # Result at index 1 has no signal — should be filtered
+        assert disambiguation.filtered_count == 1
+        assert len(disambiguation.matched_results) == 2
+        urls = [r.url for r in disambiguation.matched_results]
+        assert "https://b.com" not in urls
+
+    def test_common_name_no_signals_returns_all_unfiltered(self):
+        resolver = EntityResolver()
+        results = self._results_with_and_without_signal()
+        disambiguation = resolver.filter_results(
+            results, ScanInputs(full_name="John Smith")
+        )
+        assert disambiguation.is_common_name is True
+        assert disambiguation.has_secondary_signals is False
+        assert len(disambiguation.matched_results) == 3
+        assert disambiguation.filtered_count == 0
+
+    def test_extra_signals_used_for_filtering(self):
+        resolver = EntityResolver()
+        results = [
+            _make_result(snippet="Works at Acme Corp", url="https://a.com"),
+            _make_result(snippet="unrelated content", url="https://b.com"),
+        ]
+        disambiguation = resolver.filter_results(
+            results,
+            ScanInputs(full_name="James Brown"),
+            extra_signals=["Acme Corp"],
+        )
+        assert disambiguation.is_common_name is True
+        assert disambiguation.has_secondary_signals is True
+        assert len(disambiguation.matched_results) == 1
+        assert disambiguation.matched_results[0].url == "https://a.com"
+
+    def test_empty_results_list_handled(self):
+        resolver = EntityResolver()
+        disambiguation = resolver.filter_results(
+            [], ScanInputs(full_name="John Smith", email="j@example.com")
+        )
+        assert disambiguation.matched_results == []
+        assert disambiguation.filtered_count == 0
+
+    def test_returns_disambiguation_result_type(self):
+        resolver = EntityResolver()
+        result = resolver.filter_results([], ScanInputs())
+        assert isinstance(result, DisambiguationResult)
+
+
+class TestSearchModuleDisambiguation:
+    """Integration tests for SearchModule._aggregate_results() with EntityResolver."""
+
+    def _make_module_with_resolver(self, resolver: EntityResolver) -> SearchModule:
+        return SearchModule(
+            client=SearchClient(
+                api_key="k", engine_id="e", http_client=httpx.AsyncClient()
+            ),
+            resolver=resolver,
+        )
+
+    def test_common_name_no_signals_produces_info_severity(self):
+        resolver = EntityResolver()
+        module = self._make_module_with_resolver(resolver)
+        results = [_make_result(snippet="something", url="https://example.com")]
+        findings = module._aggregate_results(
+            results, ScanInputs(full_name="John Smith")
+        )
+        web_presence = next(f for f in findings if f.finding_type == "web_presence")
+        assert web_presence.severity == Severity.INFO
+
+    def test_common_name_with_email_produces_medium_severity(self):
+        resolver = EntityResolver()
+        module = self._make_module_with_resolver(resolver)
+        results = [
+            _make_result(snippet="john@example.com profile", url="https://ex.com")
+        ]
+        findings = module._aggregate_results(
+            results, ScanInputs(full_name="John Smith", email="john@example.com")
+        )
+        web_presence = next(f for f in findings if f.finding_type == "web_presence")
+        assert web_presence.severity == Severity.MEDIUM
+
+    def test_uncommon_name_produces_medium_severity(self):
+        resolver = EntityResolver()
+        module = self._make_module_with_resolver(resolver)
+        results = [_make_result(snippet="rare name info")]
+        findings = module._aggregate_results(
+            results, ScanInputs(full_name="Xiomara Quetzalcoatl")
+        )
+        web_presence = next(f for f in findings if f.finding_type == "web_presence")
+        assert web_presence.severity == Severity.MEDIUM
+
+    def test_filtered_count_reflected_in_evidence(self):
+        resolver = EntityResolver()
+        module = self._make_module_with_resolver(resolver)
+        results = [
+            _make_result(snippet="john@example.com", url="https://a.com"),
+            _make_result(snippet="unrelated", url="https://b.com"),
+        ]
+        findings = module._aggregate_results(
+            results, ScanInputs(full_name="John Smith", email="john@example.com")
+        )
+        web_presence = next(f for f in findings if f.finding_type == "web_presence")
+        assert web_presence.evidence["filtered_count"] == 1
+        assert web_presence.evidence["is_common_name"] is True
+
+    def test_empty_results_returns_empty_findings(self):
+        resolver = EntityResolver()
+        module = self._make_module_with_resolver(resolver)
+        findings = module._aggregate_results([], ScanInputs(full_name="John Smith"))
+        assert findings == []

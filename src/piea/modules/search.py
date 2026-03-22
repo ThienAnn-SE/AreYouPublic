@@ -163,6 +163,215 @@ _DATA_BROKER_OPT_OUT: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Entity disambiguation constants
+# ---------------------------------------------------------------------------
+
+# Documented threshold from FR-5.1; used as an explanatory value.
+# In practice, disambiguation is triggered by COMMON_NAMES membership because
+# Google CSE returns at most 10 results per call and the 3-query budget cannot
+# accumulate 100 raw results at runtime.
+COMMON_NAME_RESULT_THRESHOLD: int = 100
+
+# Lowercased first names that are statistically common enough to produce
+# identity collisions in public search results (US Census top-500 first names).
+COMMON_NAMES: frozenset[str] = frozenset(
+    {
+        # Top male first names
+        "james",
+        "john",
+        "robert",
+        "michael",
+        "william",
+        "david",
+        "richard",
+        "joseph",
+        "thomas",
+        "charles",
+        "christopher",
+        "daniel",
+        "matthew",
+        "anthony",
+        "mark",
+        "donald",
+        "steven",
+        "paul",
+        "andrew",
+        "joshua",
+        "kenneth",
+        "kevin",
+        "brian",
+        "george",
+        "timothy",
+        "ronald",
+        "edward",
+        "jason",
+        "jeffrey",
+        "ryan",
+        "jacob",
+        "gary",
+        "nicholas",
+        "eric",
+        "jonathan",
+        "stephen",
+        "larry",
+        "justin",
+        "scott",
+        "brandon",
+        "benjamin",
+        "samuel",
+        "raymond",
+        "gregory",
+        "frank",
+        "alexander",
+        "patrick",
+        "jack",
+        "dennis",
+        "jerry",
+        "tyler",
+        "aaron",
+        "jose",
+        "adam",
+        "henry",
+        "nathan",
+        "douglas",
+        "zachary",
+        "peter",
+        "kyle",
+        "noah",
+        "ethan",
+        "jeremy",
+        "christian",
+        "walter",
+        "keith",
+        "austin",
+        "roger",
+        "terry",
+        "sean",
+        "gerald",
+        "carl",
+        "dylan",
+        "harold",
+        "jordan",
+        "jesse",
+        "bryan",
+        "lawrence",
+        "arthur",
+        "gabriel",
+        "joe",
+        "logan",
+        "alan",
+        "juan",
+        "albert",
+        "wayne",
+        "ralph",
+        "roy",
+        "eugene",
+        "randy",
+        "vincent",
+        "russell",
+        "louis",
+        "philip",
+        "bobby",
+        "johnny",
+        "bradley",
+        # Top female first names
+        "mary",
+        "patricia",
+        "jennifer",
+        "linda",
+        "barbara",
+        "elizabeth",
+        "susan",
+        "jessica",
+        "sarah",
+        "karen",
+        "lisa",
+        "nancy",
+        "betty",
+        "margaret",
+        "sandra",
+        "ashley",
+        "emily",
+        "dorothy",
+        "kimberly",
+        "carol",
+        "michelle",
+        "amanda",
+        "melissa",
+        "deborah",
+        "stephanie",
+        "rebecca",
+        "sharon",
+        "laura",
+        "cynthia",
+        "kathleen",
+        "amy",
+        "angela",
+        "shirley",
+        "anna",
+        "brenda",
+        "pamela",
+        "emma",
+        "nicole",
+        "helen",
+        "samantha",
+        "katherine",
+        "christine",
+        "debra",
+        "rachel",
+        "carolyn",
+        "janet",
+        "catherine",
+        "maria",
+        "heather",
+        "diane",
+        "julie",
+        "joyce",
+        "victoria",
+        "kelly",
+        "christina",
+        "joan",
+        "evelyn",
+        "lauren",
+        "judith",
+        "olivia",
+        "cheryl",
+        "megan",
+        "alice",
+        "ann",
+        "jean",
+        "doris",
+        "andrea",
+        "marie",
+        "julia",
+        "jacqueline",
+        "grace",
+        "madison",
+        "hannah",
+        "gloria",
+        "teresa",
+        "denise",
+        "sara",
+        "amber",
+        "brittany",
+        "rose",
+        "danielle",
+        "tammy",
+        "virginia",
+        "janice",
+        "crystal",
+        "kayla",
+        "alexis",
+        "tiffany",
+        "natalie",
+        "brittney",
+        "vanessa",
+        "ruby",
+        "dawn",
+    }
+)
+
+# ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
 
@@ -218,6 +427,26 @@ class SearchResult:
     category: str
     is_data_broker: bool
     opt_out_url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DisambiguationResult:
+    """Output of EntityResolver.filter_results().
+
+    Attributes:
+        matched_results: Results that passed the disambiguation filter.
+        is_common_name: True if the subject's name triggered disambiguation
+            logic (first name is in COMMON_NAMES).
+        has_secondary_signals: True if at least one secondary signal (email,
+            username, or extra signal) was available for matching.
+        filtered_count: Number of results removed by the filter (0 when no
+            filtering was applied).
+    """
+
+    matched_results: list[SearchResult]
+    is_common_name: bool
+    has_secondary_signals: bool
+    filtered_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +544,163 @@ class ResultCategorizer:
         if _domain_matches(domain, _NEWS_DOMAINS):
             return "news_mention"
         return "uncategorized"
+
+
+# ---------------------------------------------------------------------------
+# EntityResolver
+# ---------------------------------------------------------------------------
+
+
+class EntityResolver:
+    """Disambiguates search results for subjects with statistically common names.
+
+    When a subject's first name belongs to COMMON_NAMES, results are filtered
+    to retain only those containing at least one secondary signal (email,
+    username, or caller-supplied extra) in their title, snippet, or URL.
+
+    If no secondary signals are available despite a common name, all results
+    are returned unfiltered and ``has_secondary_signals`` is set to ``False``
+    so the caller can apply confidence downgrading (e.g. lower finding severity).
+
+    When the name is not common, all results pass through unchanged.
+
+    Args:
+        common_names: Frozenset of lowercase first names to treat as common.
+            Defaults to the module-level ``COMMON_NAMES`` constant.
+    """
+
+    def __init__(
+        self,
+        common_names: frozenset[str] = COMMON_NAMES,
+    ) -> None:
+        self._common_names = common_names
+
+    def is_common_name(self, full_name: str | None) -> bool:
+        """Return True if the subject's first name is statistically common.
+
+        Splits ``full_name`` on whitespace and checks whether the first token
+        (lowercased) is a member of the configured common-names set.
+
+        Args:
+            full_name: The subject's full name string, or ``None``.
+
+        Returns:
+            ``True`` if the first name token is in the common-names set;
+            ``False`` for ``None``, empty strings, or uncommon names.
+        """
+        if not full_name:
+            return False
+        tokens = full_name.strip().split()
+        if not tokens:
+            return False
+        return tokens[0].lower() in self._common_names
+
+    def extract_signals(
+        self,
+        inputs: ScanInputs,
+        extra_signals: list[str] | None = None,
+    ) -> list[str]:
+        """Collect non-empty secondary signal strings from scan inputs.
+
+        ``full_name`` is intentionally excluded — it is the primary, collision-
+        prone identifier and therefore never used as a secondary signal.
+        Email and username are the ScanInputs-derived signals; ``extra_signals``
+        carries caller-supplied strings such as employer or location.
+
+        Args:
+            inputs: Scan inputs from which to extract email and username.
+            extra_signals: Optional additional signal strings. Each is stripped
+                and lowercased before being included.
+
+        Returns:
+            Deduplicated list of non-empty lowercase signal strings.
+        """
+        raw: list[str | None] = [inputs.email, inputs.username]
+        if extra_signals:
+            raw.extend(extra_signals)
+        seen: set[str] = set()
+        signals: list[str] = []
+        for s in raw:
+            if s:
+                normalized = s.strip().lower()
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    signals.append(normalized)
+        return signals
+
+    def result_matches_signal(
+        self,
+        result: SearchResult,
+        signals: list[str],
+    ) -> bool:
+        """Return True if any signal string appears in the result's text fields.
+
+        Searches the concatenated (lowercased) title, snippet, and URL.
+        Matching is case-insensitive substring search — sufficient for emails,
+        usernames, and employer names that appear verbatim in search snippets.
+
+        Args:
+            result: The search result to evaluate.
+            signals: Non-empty lowercase signal strings to search for.
+
+        Returns:
+            ``True`` if at least one signal is a substring of the result text;
+            ``False`` if no signals match or the signals list is empty.
+        """
+        if not signals:
+            return False
+        haystack = " ".join([result.title, result.snippet, result.url]).lower()
+        return any(signal in haystack for signal in signals)
+
+    def filter_results(
+        self,
+        results: list[SearchResult],
+        inputs: ScanInputs,
+        extra_signals: list[str] | None = None,
+    ) -> DisambiguationResult:
+        """Filter results for common-name subjects; pass through otherwise.
+
+        Disambiguation logic:
+        - Name NOT common → return all results unmodified.
+        - Name IS common, signals exist → retain only signal-matching results.
+        - Name IS common, NO signals → return all results with
+          ``has_secondary_signals=False`` so the caller can downgrade confidence.
+
+        Args:
+            results: Raw search results aggregated across executed queries.
+            inputs: Scan inputs identifying the subject.
+            extra_signals: Optional additional signal strings (employer, location).
+
+        Returns:
+            :class:`DisambiguationResult` carrying the filtered list and
+            diagnostic flags used by callers for severity adjustment.
+        """
+        common = self.is_common_name(inputs.full_name)
+        if not common:
+            return DisambiguationResult(
+                matched_results=list(results),
+                is_common_name=False,
+                has_secondary_signals=False,
+                filtered_count=0,
+            )
+
+        signals = self.extract_signals(inputs, extra_signals)
+        if not signals:
+            # Common name but no signals available — return all, flag low confidence.
+            return DisambiguationResult(
+                matched_results=list(results),
+                is_common_name=True,
+                has_secondary_signals=False,
+                filtered_count=0,
+            )
+
+        matched = [r for r in results if self.result_matches_signal(r, signals)]
+        return DisambiguationResult(
+            matched_results=matched,
+            is_common_name=True,
+            has_secondary_signals=True,
+            filtered_count=len(results) - len(matched),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -474,11 +860,16 @@ class SearchModule(BaseModule):
             constructed from settings.google_cse_api_key / google_cse_engine_id.
     """
 
-    def __init__(self, client: SearchClient | None = None) -> None:
+    def __init__(
+        self,
+        client: SearchClient | None = None,
+        resolver: EntityResolver | None = None,
+    ) -> None:
         self._client = client or SearchClient(
             api_key=settings.google_cse_api_key,
             engine_id=settings.google_cse_engine_id,
         )
+        self._resolver = resolver or EntityResolver()
 
     @property
     def name(self) -> str:
@@ -602,14 +993,17 @@ class SearchModule(BaseModule):
     ) -> list[ModuleFinding]:
         """Convert raw SearchResults into ModuleFindings.
 
+        Applies entity disambiguation via EntityResolver before building
+        findings. When the subject has a common name, results not matching any
+        secondary signal are filtered out. The summary finding severity and
+        confidence note reflect the disambiguation outcome.
+
         Produces one HIGH finding per unique data broker domain, plus a
-        summary web-presence finding. Severity of the summary is INFO when
-        only full_name is provided (entity disambiguation — low confidence
-        without secondary signals like email or username).
+        summary web-presence finding.
 
         Args:
             results: All search results aggregated across executed queries.
-            inputs: Original scan inputs used for disambiguation check.
+            inputs: Original scan inputs used for disambiguation.
 
         Returns:
             List of ModuleFinding objects (empty if results is empty).
@@ -617,9 +1011,15 @@ class SearchModule(BaseModule):
         if not results:
             return []
 
+        disambiguation = self._resolver.filter_results(results, inputs)
+        working_results = disambiguation.matched_results
+
         findings: list[ModuleFinding] = []
 
-        # One HIGH finding per unique data broker domain
+        # Data broker findings are always produced — we err on the side of
+        # flagging potential exposures even for common-name subjects, since a
+        # false negative (missing a real broker listing) is worse than a false
+        # positive (flagging one that belongs to a different person).
         seen_domains: set[str] = set()
         for r in results:
             if not r.is_data_broker:
@@ -652,12 +1052,21 @@ class SearchModule(BaseModule):
                 )
             )
 
-        # Summary finding — severity reflects confidence in identity match
-        only_name = bool(inputs.full_name) and not inputs.email and not inputs.username
-        summary_severity = Severity.INFO if only_name else Severity.MEDIUM
+        # Confidence is low when the name is common and no secondary signals
+        # were available to anchor results to the specific subject.
+        low_confidence = (
+            disambiguation.is_common_name and not disambiguation.has_secondary_signals
+        )
+        summary_severity = Severity.INFO if low_confidence else Severity.MEDIUM
         low_confidence_note = (
             " Confidence is low — only a name was provided with no secondary signals."
-            if only_name
+            if low_confidence
+            else ""
+        )
+        disambiguation_note = (
+            f" {disambiguation.filtered_count} result(s) excluded by entity"
+            " disambiguation (common name, no signal match)."
+            if disambiguation.filtered_count > 0
             else ""
         )
         findings.append(
@@ -665,21 +1074,23 @@ class SearchModule(BaseModule):
                 finding_type="web_presence",
                 severity=summary_severity,
                 category="web_presence",
-                title=f"{len(results)} public web result(s) found",
+                title=f"{len(working_results)} public web result(s) found",
                 description=(
-                    f"Google search returned {len(results)} result(s) for the "
-                    f"provided identity.{low_confidence_note}"
+                    f"Google search returned {len(working_results)} result(s) for the "
+                    f"provided identity.{low_confidence_note}{disambiguation_note}"
                 ),
                 platform="google",
                 evidence={
-                    "total_results": len(results),
-                    "category_counts": _count_categories(results),
+                    "total_results": len(working_results),
+                    "category_counts": _count_categories(working_results),
+                    "is_common_name": disambiguation.is_common_name,
+                    "filtered_count": disambiguation.filtered_count,
                 },
                 remediation_action=(
                     "Review results and remove or limit public profiles as appropriate."
                 ),
                 remediation_effort="hard",
-                weight=0.3 if only_name else 0.5,
+                weight=0.3 if low_confidence else 0.5,
             )
         )
 

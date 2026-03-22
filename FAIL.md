@@ -16,6 +16,7 @@
 | F004 | 2026-03-21 | T1.5 | CONFIG_ERROR | `.github/workflows/security.yml` | FIXED |
 | F005 | 2026-03-21 | T1.5 | CONFIG_ERROR | `pyproject.toml`, `.github/workflows/ci.yml` | FIXED |
 | F006 | 2026-03-21 | T1.5 | IMPORT_ERROR | Multiple files | FIXED |
+| F007 | 2026-03-21 | T3.1 | LOGIC_ERROR | `src/piea/modules/search.py` | FIXED |
 
 ---
 
@@ -177,6 +178,34 @@ Ran `ruff check --fix` to auto-fix 17 errors, then manually fixed 2 remaining: a
 ### Prevention rule
 Always run `ruff check src/ tests/` AND `ruff format --check src/ tests/` before every commit. Run them on the ENTIRE project, not just changed files — import removals in one file can create unused imports in another.
 
+---
+
+## F007 — `_build_queries` emits duplicate queries when email is only input
+
+**Date:** 2026-03-21
+**Task:** T3.1
+**File:** `src/piea/modules/search.py`
+**Test:** `test_search.py — test_build_queries_deduplication`
+**Category:** LOGIC_ERROR
+**Status:** FIXED
+
+### What happened
+When a ScanInputs contained only an email address (no username or full_name), the `_build_queries()` method returned a list containing the same email query twice: once as Q1 (primary input fallback) and again as Q3 (secondary identifiers list). This caused redundant Google CSE API calls and duplicate search results.
+
+### Root cause
+The method tracked which input type was primary (email vs username) but did not exclude the primary type from the Q3 secondary-identifiers query. When email was the sole input, it appeared in both Q1 and Q3 lists before deduplication.
+
+### Fix applied
+Added explicit `primary_type` tracking during query construction. When building Q3 from secondary identifiers, skip any identifier that matches the primary_type. Also added early return if only Q1 can be constructed (avoids empty list). The deduplication now checks all three queries against a set of constructed values before returning.
+
+### Prevention rule
+When building multiple queries from heterogeneous inputs (email, username, full_name), always track which input type was selected as primary and explicitly exclude it from secondary/tertiary query construction. Use a set to deduplicate before returning the final query list.
+
+### Related
+- Learning created: L013 (new learning about query deduplication in search modules)
+
+---
+
 <!--
 TEMPLATE — copy this for each new failure:
 
@@ -212,7 +241,7 @@ TEMPLATE — copy this for each new failure:
 
 | Category | Count | Last occurrence |
 |----------|-------|----------------|
-| LOGIC_ERROR | 0 | — |
+| LOGIC_ERROR | 1 | F007 (2026-03-21) |
 | TYPE_ERROR | 1 | F003 (2026-03-21) |
 | INTERFACE_MISMATCH | 0 | — |
 | MISSING_HANDLING | 0 | — |

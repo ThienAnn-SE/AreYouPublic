@@ -22,6 +22,10 @@
 | L010 | 2026-03-21 | Task T2.4 (positive) | pattern | module-design, execute-pattern, result-aggregation | Extract result aggregation logic to dedicated method to keep execute() under 20 lines |
 | L011 | 2026-03-21 | Task T2.5 (positive) | pattern | profile-extraction, bio-parsing, regex | Use span tracking in regex extraction to avoid overlapping token matches in bio text |
 | L012 | 2026-03-21 | Task T2.6 (positive) | pattern | sqlalchemy, orm, id-generation, unit-testing | Set SQLAlchemy UUID ids explicitly at object construction time for test usability |
+| L013 | 2026-03-21 | Failure F007 at T3.1 | pattern | query-building, deduplication, search | Track primary input type when building multi-source queries to avoid duplicates |
+| L014 | 2026-03-22 | Task T3.3 (positive) | pattern | disambiguation, search-results, name-collision | Use name-list heuristic + secondary signal matching to disambiguate common names in search results |
+| L015 | 2026-03-22 | Task T3.2 (positive) | pattern | asyncio, blocking-library, whois, dns | Wrap blocking third-party libraries in asyncio.to_thread(), remap exceptions to domain errors, sanitize error messages |
+| L016 | 2026-03-22 | Task T3.6 (positive) | security | httpx, error-handling, pii, api-key | Re-raise httpx errors with `from None` when API key is in URL query param to drop the exception chain |
 
 ---
 
@@ -470,6 +474,225 @@ T2.6 (GraphNode, GraphEdge persistence), T3.x (any new tables with UUID PKs), an
 
 ---
 
+## L013 — Track primary input type when building multi-source queries
+
+**Date:** 2026-03-21
+**Source:** Failure F007 at Task T3.1
+**Category:** pattern
+**Tags:** query-building, deduplication, search, email, username
+
+### Learning
+When constructing multiple search queries from heterogeneous inputs (email, username, full_name), a naive approach constructs each query type independently. This causes the same identifier to appear in multiple query lists if it is used as a fallback or in secondary combination logic. Tracking which input type was selected as primary allows explicit exclusion of that type from later query sources, preventing duplicates.
+
+### Rule
+When building N queries from M input sources:
+1. Identify the primary source (the one with highest priority/lowest missing rate)
+2. Build Q1 from the primary source
+3. For Q2, Q3, ... only include secondary/tertiary sources that were NOT used in earlier queries
+4. Deduplicate the final query list using a set before returning
+
+### Example
+```python
+# BEFORE (email appears in both Q1 and Q3, causing duplicates)
+def _build_queries(inputs: ScanInputs) -> list[str]:
+    queries = []
+    # Q1: primary (email or username)
+    if inputs.email:
+        queries.append(inputs.email)
+    elif inputs.username:
+        queries.append(inputs.username)
+
+    # Q2, Q3: secondary combinations
+    if inputs.full_name:
+        queries.append(f"{inputs.full_name} {inputs.username or ''}")
+        queries.append(f"{inputs.full_name} {inputs.email or ''}")  # email again!
+
+    return queries
+
+# AFTER (tracks primary type, excludes it from later queries)
+def _build_queries(inputs: ScanInputs) -> list[str]:
+    queries = set()
+
+    # Determine primary source and track it
+    primary_type = None
+    if inputs.email:
+        queries.add(inputs.email)
+        primary_type = "email"
+    elif inputs.username:
+        queries.add(inputs.username)
+        primary_type = "username"
+    else:
+        return list(queries)  # no queries possible
+
+    # Q2: full_name with secondary identifier (skip primary type)
+    if inputs.full_name:
+        if primary_type != "username" and inputs.username:
+            queries.add(f"{inputs.full_name} {inputs.username}")
+        elif primary_type != "email" and inputs.email:
+            queries.add(f"{inputs.full_name} {inputs.email}")
+
+    # Return deduplicated list
+    return list(queries)
+```
+
+### Applies to
+T3.1 (SearchModule query builder), T3.2 (domain intelligence), and any future module that constructs multiple queries/requests from overlapping input sources.
+
+---
+
+## L014 — Use name-list heuristic + secondary signal matching for search result disambiguation
+
+**Date:** 2026-03-22
+**Source:** Task T3.3 (positive — EntityResolver implementation)
+**Category:** pattern
+**Tags:** disambiguation, search-results, name-collision, entity-resolution, secondary-signals
+
+### Learning
+When a name-only scan (no email/username) is performed, multiple people may match the query in search results. A static list of common names (e.g., US Census top-frequency first names) combined with secondary signal matching (domain presence, employer keywords, location) can disambiguate results without requiring external entity linking APIs or ML models.
+
+### Rule
+When disambiguating search results for a name:
+1. Maintain a frozen set of common first names (~190 US Census names for English-language scans)
+2. Extract secondary signals from each result: domain, TLD, title/snippet keywords, caller-supplied signals (employer, location)
+3. Match signals using substring matching against result title/snippet/URL
+4. Common names + zero matching signals → INFO severity (low confidence)
+5. Uncommon names or any signal match → preserve original severity (medium or higher)
+6. Always generate data broker findings from the unfiltered result list (prevent false negatives on high-confidence findings)
+
+### Example
+```python
+# BEFORE (name-only scans always MEDIUM severity, even if 500+ people match)
+async def _aggregate_results(self, results: list[SearchResult]) -> list[ModuleFinding]:
+    findings = []
+    for result in results:
+        findings.append(ModuleFinding(
+            title=result.title,
+            severity=Severity.MEDIUM,  # Always MEDIUM regardless of name frequency
+            ...
+        ))
+    return findings
+
+# AFTER (use EntityResolver to distinguish common vs uncommon names)
+async def _aggregate_results(self, results: list[SearchResult]) -> list[ModuleFinding]:
+    findings = []
+
+    # Disambiguate regular findings
+    if self._resolver:
+        disam = self._resolver.filter_results(results, self._subject_name)
+        for result in disam.matched_results:
+            severity = Severity.INFO if disam.is_common_name and not disam.has_secondary_signals else self._categorize(result).severity
+            findings.append(ModuleFinding(
+                title=result.title,
+                severity=severity,
+                ...
+            ))
+    else:
+        # No resolver; use unfiltered results
+        for result in results:
+            findings.append(...)
+
+    # Data brokers ALWAYS from full results (avoid false negatives)
+    for result in results:
+        is_broker, opt_out = self._detector.check(result.url)
+        if is_broker:
+            findings.append(ModuleFinding(
+                finding_type="data_broker_listing",
+                severity=Severity.HIGH,  # High confidence for data broker
+                ...
+            ))
+
+    return findings
+```
+
+### Applies to
+T3.1 (SearchModule via EntityResolver), T3.4+ (WhoisClient, other search/lookup modules), any future module that must disambiguate results when only a name is available.
+
+---
+
+## L015 — Wrap blocking third-party libraries with asyncio.to_thread() and sanitize error messages
+
+**Date:** 2026-03-22
+**Source:** Task T3.2 (positive — domain intelligence module implementation)
+**Category:** pattern
+**Tags:** asyncio, blocking-library, whois, dns, exception-handling, pii
+
+### Learning
+Libraries like python-whois and dnspython are synchronous and blocking (socket-based I/O). When called in async code, they block the event loop, stalling all other tasks. The standard pattern is to wrap the entire blocking call in `asyncio.to_thread()`. Additionally, third-party library exceptions often include raw server response text that may contain PII or sensitive data — these must be caught and re-raised as domain-specific errors with sanitized messages.
+
+### Rule
+When integrating a blocking third-party library into async code:
+1. Wrap the entire operation in `asyncio.to_thread()`
+2. Catch all exceptions from the library in a try/except block
+3. Map library exceptions to domain-specific error classes (e.g., library.TimeoutError → DomainIntelTimeoutError)
+4. Remove raw response text from re-raised exception messages — only include domain-safe information
+5. Use `from exc` if the traceback is needed for debugging, `from None` for cleaner error chains
+
+### Example
+```python
+# BEFORE (blocks event loop + leaks server response in error)
+def lookup_domain(domain: str) -> WhoisData:
+    return whois.whois(domain)  # blocks event loop
+    # On error: raw "socket timeout: 30s — Remote server responded with: Connection reset"
+
+# AFTER (async-safe + sanitized errors)
+async def lookup_domain(domain: str) -> WhoisData:
+    try:
+        result = await asyncio.to_thread(whois.whois, domain)
+        return WhoisData(...)
+    except socket.timeout as exc:
+        raise DomainIntelTimeoutError(f"WHOIS lookup exceeded {TIMEOUT_SECONDS}s") from exc
+    except Exception as exc:
+        # Don't include exc.response text — it may contain server details
+        raise DomainIntelLookupError("WHOIS lookup failed") from None
+```
+
+### Applies to
+T3.2 (WhoisClient, DNSAnalyzer), T3.6 (Hunter.io API), T3.7 (paste site monitor), and any future module that calls blocking external APIs or libraries.
+
+---
+
+## L016 — Re-raise httpx errors with `from None` when API key is in URL query param
+
+**Date:** 2026-03-22
+**Source:** Task T3.6 (positive — HunterClient implementation)
+**Category:** security
+**Tags:** httpx, error-handling, pii, api-key, query-param
+
+### Learning
+When an HTTP client library like httpx raises an exception, the exception chain includes the full request details. If the API key is embedded in the URL query string (as with Hunter.io's `?domain=example.com&api_key=SECRET`), re-raising the exception without dropping the chain will expose the secret in any error log or traceback. Using `from None` drops the chained exception and prevents this leakage.
+
+### Rule
+When re-raising httpx exceptions for APIs that include secrets in the URL query string, always use `raise DomainError(...) from None` to drop the exception chain. Verify in tests that `exc_info.value.__cause__ is None`.
+
+### Example
+```python
+# BEFORE (leaks API key in exception chain)
+try:
+    response = await client.get("https://api.hunter.io/v2/domain-search?domain=example.com&api_key=SECRET")
+    response.raise_for_status()
+except httpx.HTTPStatusError as exc:
+    # Exception chain contains full URL with API key
+    raise HunterAPIError(f"Domain search failed") from exc  # WRONG — chain exposed
+
+# AFTER (clean exception chain — API key not leaked)
+try:
+    response = await client.get("https://api.hunter.io/v2/domain-search?domain=example.com&api_key=SECRET")
+    response.raise_for_status()
+except httpx.HTTPStatusError as exc:
+    # Exception chain dropped — no URL in traceback
+    raise HunterAPIError(f"Domain search failed for {domain}") from None  # CORRECT
+
+# In test:
+with pytest.raises(HunterAPIError) as exc_info:
+    await client.domain_search("example.com")
+assert exc_info.value.__cause__ is None  # Verify chain is dropped
+```
+
+### Applies to
+T3.6 (HunterClient), T3.7+ (PasteMonitor, other APIs with secrets in URL), and any future module that calls external APIs with secrets in query parameters or headers that may appear in logs.
+
+---
+
 <!--
 TEMPLATE — copy this for each new learning:
 
@@ -520,6 +743,9 @@ TEMPLATE — copy this for each new learning:
 - L010: Extract result aggregation to keep execute() under 20 lines
 - L011: Use span tracking in regex extraction to avoid overlapping token matches
 - L012: Set SQLAlchemy UUID ids explicitly at construction for test usability
+- L013: Track primary input type when building multi-source queries to avoid duplicates
+- L014: Name-list heuristic + secondary signal matching for search result disambiguation
+- L015: Wrap blocking third-party libraries with asyncio.to_thread() and sanitize error messages
 
 ### Testing techniques
 - L004: Exclude `tests/` from high-entropy string CI scans
@@ -535,6 +761,7 @@ TEMPLATE — copy this for each new learning:
 ### Security considerations
 - L007: Re-raise httpx errors as domain errors to prevent PII leaking
 - L009: Rate-limit sleep in `finally` prevents 429 bypass
+- L016: Re-raise httpx errors with `from None` when API key is in URL query param
 
 ---
 
@@ -549,6 +776,10 @@ TEMPLATE — copy this for each new learning:
 | `DATABASE_URL` env var priority in conftest with SQLite type overrides | T1.5 | 0 | — |
 | `execute()` calls API, delegates aggregation to `_aggregate_results()`, returns ModuleResult | T2.4 | 0 | — |
 | BFS via `asyncio.Queue` with visited set, `asyncio.wait_for()` for timeout, explicit id=uuid4() | T2.6 | 0 | — |
+| EntityResolver: frozen name set + signal extraction/matching for result disambiguation | T3.3 | 0 | — |
+| `await asyncio.to_thread(blocking_call, args)` with exception mapping to domain errors | T3.2 | 0 | — |
+| Rate-limit sleep in `finally` block inside `asyncio.Semaphore` context (L009 + L016 pattern) | T3.6 | 0 | — |
+| HunterClient: domain-search + email-finder with partial success, L007+L009 compliant | T3.6 | 0 | — |
 
 ---
 
