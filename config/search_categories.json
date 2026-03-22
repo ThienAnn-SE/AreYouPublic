@@ -1,0 +1,75 @@
+{
+  "categories": {
+    "social": {
+      "domains": [
+        "twitter.com", "x.com", "facebook.com", "instagram.com",
+        "tiktok.com", "snapchat.com", "pinterest.com", "tumblr.com",
+        "reddit.com", "mastodon.social", "threads.net", "bsky.app",
+        "vk.com", "weibo.com", "flickr.com", "deviantart.com",
+        "myspace.com", "aboutme.com", "about.me"
+      ],
+      "domain_suffixes": [".social", ".masto.host"],
+      "url_keywords": ["/user/", "/u/", "/profile/", "/@"],
+      "snippet_keywords": ["follower", "following", "posted", "joined", "tweets", "likes"]
+    },
+    "news": {
+      "domains": [
+        "nytimes.com", "washingtonpost.com", "theguardian.com",
+        "bbc.com", "bbc.co.uk", "cnn.com", "reuters.com",
+        "apnews.com", "nbcnews.com", "abcnews.go.com",
+        "forbes.com", "bloomberg.com", "wsj.com",
+        "techcrunch.com", "theverge.com", "arstechnica.com",
+        "wired.com", "engadget.com", "vice.com", "buzzfeed.com",
+        "huffpost.com", "usatoday.com", "latimes.com",
+        "politico.com", "thehill.com", "axios.com"
+      ],
+      "domain_suffixes": [],
+      "url_keywords": ["/article/", "/news/", "/story/", "/press/", "/blog/"],
+      "snippet_keywords": ["reported", "published", "according to", "breaking", "headline", "press release"]
+    },
+    "professional": {
+      "domains": [
+        "linkedin.com", "glassdoor.com", "indeed.com",
+        "xing.com", "angel.co", "wellfound.com", "crunchbase.com",
+        "behance.net", "dribbble.com", "kaggle.com",
+        "researchgate.net", "academia.edu", "scholar.google.com",
+        "orcid.org", "github.com", "gitlab.com", "bitbucket.org",
+        "stackoverflow.com", "stackexchange.com",
+        "medium.com", "dev.to", "hashnode.dev",
+        "npmjs.com", "pypi.org", "hub.docker.com"
+      ],
+      "domain_suffixes": [],
+      "url_keywords": ["/in/", "/company/", "/jobs/", "/resume/", "/cv/", "/portfolio/"],
+      "snippet_keywords": ["experience", "skills", "employee", "developer", "engineer", "manager", "director", "founder", "ceo"]
+    },
+    "forum": {
+      "domains": [
+        "quora.com", "news.ycombinator.com",
+        "discourse.org", "phpbb.com", "xenforo.com",
+        "4chan.org", "8kun.top", "kiwifarms.net",
+        "voat.co", "lemmy.ml", "tildes.net",
+        "gamespot.com", "ign.com", "neogaf.com", "resetera.com",
+        "slashdot.org", "lobste.rs", "producthunt.com",
+        "trustpilot.com", "yelp.com", "tripadvisor.com"
+      ],
+      "domain_suffixes": [],
+      "url_keywords": ["/forum/", "/thread/", "/topic/", "/discussion/", "/t/", "/questions/", "/ask/", "/comments/"],
+      "snippet_keywords": ["replied", "thread", "discussion", "answer", "question", "forum", "community", "comment"]
+    },
+    "data_broker": {
+      "domains": [
+        "spokeo.com", "beenverified.com", "whitepages.com",
+        "peoplefinder.com", "intelius.com", "radaris.com",
+        "pipl.com", "instantcheckmate.com", "truthfinder.com",
+        "mylife.com", "usphonebook.com", "fastpeoplesearch.com",
+        "thatsthem.com", "peekyou.com", "addresses.com",
+        "clustrmaps.com", "411.com", "publicrecordsnow.com",
+        "checkpeople.com", "anywho.com", "peoplebyname.com",
+        "familytreenow.com", "zabasearch.com", "intellius.com"
+      ],
+      "domain_suffixes": [],
+      "url_keywords": ["/people/", "/search/", "/lookup/", "/find/"],
+      "snippet_keywords": ["public records", "background check", "people search", "find anyone", "address history", "phone number"]
+    }
+  }
+}
