@@ -642,7 +642,7 @@ class TestEntityResolverExtractSignals:
     def test_extra_signals_included(self):
         resolver = EntityResolver()
         signals = resolver.extract_signals(
-            ScanInputs(email="a@b.com"),
+            ScanInputs(email="a@example.com"),
             extra_signals=["Acme Corp", "New York"],
         )
         assert "acme corp" in signals
@@ -655,10 +655,10 @@ class TestEntityResolverExtractSignals:
     def test_duplicate_signals_deduplicated(self):
         resolver = EntityResolver()
         signals = resolver.extract_signals(
-            ScanInputs(email="a@b.com"),
-            extra_signals=["a@b.com"],
+            ScanInputs(email="a@example.com"),
+            extra_signals=["a@example.com"],
         )
-        assert signals.count("a@b.com") == 1
+        assert signals.count("a@example.com") == 1
 
     def test_blank_extra_signals_ignored(self):
         resolver = EntityResolver()

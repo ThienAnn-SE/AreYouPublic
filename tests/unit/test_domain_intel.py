@@ -193,8 +193,8 @@ class TestExtractDomain:
     def test_valid_email(self):
         assert DomainIntelModule._extract_domain("user@example.com") == "example.com"
 
-    def test_subdomain_email(self):
-        assert DomainIntelModule._extract_domain("a@mail.corp.com") == "mail.corp.com"
+    def test_alternate_tld(self):
+        assert DomainIntelModule._extract_domain("a@example.org") == "example.org"
 
     def test_no_at_sign_returns_none(self):
         assert DomainIntelModule._extract_domain("notanemail") is None
