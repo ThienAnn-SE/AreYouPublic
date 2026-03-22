@@ -265,7 +265,7 @@ class SearchModule(BaseModule):
             severity = Severity.HIGH
 
         identifier = inputs.full_name or inputs.username or inputs.email or "target"
-        evidence: dict[str, object] = {
+        evidence: dict[str, Any] = {
             "query_count": len(queries_used),
             "result_count": result_count,
             "urls": [h.url for h in hits[:10]],
@@ -292,7 +292,7 @@ class SearchModule(BaseModule):
         parts = domain.split(".")
         registered = ".".join(parts[-2:])
         optout_url = self._get_optout_url(registered)
-        evidence: dict[str, object] = {
+        evidence: dict[str, Any] = {
             "url": hit.url,
             "title": hit.title,
             "snippet": hit.snippet,
