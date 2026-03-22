@@ -85,3 +85,4 @@ frontend/build/
 .claude/agent-memory-local/
 .claude/agent-log.txt
 .claude/__pycache__/
+.claude/worktrees/
