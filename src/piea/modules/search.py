@@ -1,0 +1,164 @@
+"""Google Custom Search API module for PIEA.
+
+Enumerates the public web footprint of a target identity using the
+Google Custom Search JSON API, detects data broker exposure, and
+returns structured ModuleFinding results.
+
+External docs: https://developers.google.com/custom-search/v1
+Requirements: FR-5.1 (web search), FR-5.2 (data broker flagging)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+
+from piea.modules.base import (
+    BaseModule,
+    ModuleResult,
+    ScanInputs,
+)
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CSE_API_BASE = "https://www.googleapis.com/customsearch/v1"
+MAX_QUERIES_PER_SCAN = 3
+DEFAULT_BROKERS_CONFIG_PATH = Path("config/data_brokers.json")
+
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class SearchHit:
+    """A single result returned by the Google Custom Search API.
+
+    Attributes:
+        title: Page title from the search result.
+        snippet: Short text excerpt shown in search results.
+        url: Canonical URL of the result page.
+        display_link: Registered domain shown by Google (e.g. "linkedin.com").
+    """
+
+    title: str
+    snippet: str
+    url: str
+    display_link: str
+
+
+@dataclass(frozen=True, slots=True)
+class SearchQueryResult:
+    """Output of a single query execution against the CSE API.
+
+    Attributes:
+        query: The query string that was submitted.
+        hits: Ordered results returned for this query.
+        quota_exhausted: True when the API returned HTTP 429 (daily quota hit).
+    """
+
+    query: str
+    hits: tuple[SearchHit, ...]
+    quota_exhausted: bool = False
+
+
+# ---------------------------------------------------------------------------
+# SearchClient (stub — replaced in Task 4)
+# ---------------------------------------------------------------------------
+
+
+class SearchClient:
+    """Thin async HTTP wrapper around the Google Custom Search JSON API."""
+
+    def __init__(self, api_key: str, engine_id: str, timeout: float = 10.0) -> None:
+        self._api_key = api_key
+        self._engine_id = engine_id
+        self._timeout = timeout
+
+    async def search(self, query: str) -> tuple[SearchHit, ...]:
+        """Execute one search query. Stub — replaced in Task 4."""
+        raise NotImplementedError
+
+    async def close(self) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# SearchModule
+# ---------------------------------------------------------------------------
+
+
+class SearchModule(BaseModule):
+    """OSINT module: enumerates public search footprint via Google CSE."""
+
+    def __init__(
+        self,
+        api_key: str,
+        engine_id: str,
+        brokers_config_path: Path = DEFAULT_BROKERS_CONFIG_PATH,
+        timeout: float = 10.0,
+    ) -> None:
+        self._client = SearchClient(
+            api_key=api_key, engine_id=engine_id, timeout=timeout
+        )
+        broker_data = json.loads(brokers_config_path.read_text(encoding="utf-8"))
+        brokers = broker_data["brokers"]
+        self._broker_domains: frozenset[str] = frozenset(
+            entry["domain"] for entry in brokers
+        )
+        self._broker_optout: dict[str, str] = {
+            entry["domain"]: entry["optout_url"] for entry in brokers
+        }
+
+    @property
+    def name(self) -> str:
+        return "search"
+
+    def _build_queries(self, inputs: ScanInputs) -> list[str]:
+        """Build up to MAX_QUERIES_PER_SCAN queries from available inputs."""
+        candidates: list[str] = []
+
+        if inputs.full_name:
+            candidates.append(f'"{inputs.full_name}"')
+
+        if inputs.full_name and inputs.email and "@" in inputs.email:
+            email_domain = inputs.email.split("@")[1]
+            candidates.append(f'"{inputs.full_name}" "@{email_domain}"')
+
+        if inputs.username and len(candidates) < MAX_QUERIES_PER_SCAN:
+            candidates.append(f'"{inputs.username}"')
+
+        if (
+            inputs.full_name
+            and inputs.username
+            and len(candidates) < MAX_QUERIES_PER_SCAN
+        ):
+            candidates.append(f'"{inputs.full_name}" "{inputs.username}"')
+
+        return list(dict.fromkeys(candidates))[:MAX_QUERIES_PER_SCAN]
+
+    def _is_broker(self, hit: SearchHit) -> bool:
+        """Return True if the hit's domain is in the known data broker registry."""
+        domain = hit.display_link.lower().removeprefix("www.")
+        parts = domain.split(".")
+        registered = ".".join(parts[-2:])
+        return registered in self._broker_domains
+
+    def _get_optout_url(self, registered_domain: str) -> str:
+        """Return the opt-out URL for a broker domain, or a fallback."""
+        return self._broker_optout.get(
+            registered_domain, f"https://{registered_domain}"
+        )
+
+    async def execute(self, inputs: ScanInputs) -> ModuleResult:
+        """Stub — implemented in Task 6."""
+        raise NotImplementedError
+
+    async def close(self) -> None:
+        await self._client.close()
